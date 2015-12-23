@@ -27,21 +27,9 @@ else
 acenic-objs := acenic/tg1.bin acenic/tg2.bin
 endif
 
-# Use generic/intl synaptics firmware by default.
 synaptics_firmware_subdir := g3
-# Override synaptics firmware for specific variants.
-# There are two variants: g3_clr_pr, g3_kddi_jp.
-# g3_clr_pr does not appear to be referenced in any config files
-# so we can't handle it here.
-ifdef CONFIG_MACH_MSM8974_G3_KDDI
-synaptics_firmware_subdir := g3_kddi_jp
-endif
-ifdef CONFIG_MACH_MSM8974_G3_KDDI_EVB
-synaptics_firmware_subdir := g3_kddi_jp
-endif
-
-synaptics_img_file := $(wildcard $(srctree)/firmware/synaptics/$(synaptics_firmware_subdir)/*)
-
+synaptics_img_file := $(wildcard $(srctree)/firmware/synaptics/$(synaptics_firmware_subdir)/*.img)
+synaptics_img_file += $(wildcard $(srctree)/firmware/synaptics/$(synaptics_firmware_subdir)/*.txt)
 synaptics_firmware := $(subst $(srctree)/firmware/,,$(synaptics_img_file))
 
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_RMI4) += $(synaptics_firmware)
@@ -165,14 +153,14 @@ fw-shipped-all := $(fw-shipped-y) $(fw-shipped-m) $(fw-shipped-)
 # Directories which we _might_ need to create, so we have a rule for them.
 firmware-dirs := $(sort $(addprefix $(objtree)/$(obj)/,$(dir $(fw-external-y) $(fw-shipped-all))))
 
+quiet_cmd_copy  = COPY    $@
+      cmd_copy  = cp $(srctree)/$@ $@
+
 quiet_cmd_mkdir = MKDIR   $(patsubst $(objtree)/%,%,$@)
       cmd_mkdir = mkdir -p $@
 
 quiet_cmd_ihex  = IHEX    $@
       cmd_ihex  = $(OBJCOPY) -Iihex -Obinary $< $@
-
-quiet_cmd_copy  = COPY    $@
-      cmd_copy  = cp $(srctree)/$@ $@
 
 quiet_cmd_ihex2fw  = IHEX2FW $@
       cmd_ihex2fw  = $(objtree)/$(obj)/ihex2fw $< $@

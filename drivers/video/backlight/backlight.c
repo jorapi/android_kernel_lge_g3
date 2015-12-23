@@ -207,7 +207,7 @@ static ssize_t backlight_show_actual_brightness(struct device *dev,
 
 static struct class *backlight_class;
 
-#if defined(CONFIG_MACH_LGE_BACKLIGHT_SUPPORT)
+#ifdef CONFIG_MACH_LGE_BACKLIGHT_SUPPORT
 struct backlight_device *get_backlight_device()
 {
 	struct class_dev_iter iter;
@@ -227,7 +227,7 @@ struct backlight_device *get_backlight_device()
 	if (dev) {
 		bd = to_backlight_device(dev);
 		pr_info("%s: backlight device name is %s", __func__,
-						(bd)?bd->dev.kobj.name:"NULL");
+						(bd) ? bd->dev.kobj.name : "NULL");
 	}
 	class_dev_iter_exit(&iter);
 	return bd;

@@ -38,23 +38,26 @@
 #include <linux/reboot.h>
 #include <linux/switch.h>
 #include <linux/qpnp-misc.h>
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
 #include <linux/completion.h>
 #include <linux/kthread.h>
 #include <linux/timer.h>
 #endif
 
 #define I2C_SUSPEND_WORKAROUND
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 #include <linux/power/unified_wireless_charger.h>
+#endif
+
+#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
+#define NEED_PM_WORKAROUND	1
 #endif
 
 #ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
 #include <mach/lge_charging_scenario.h>
 #define MONITOR_BATTEMP_POLLING_PERIOD          (60*HZ)
 #endif
-
-#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 #include <linux/power/lge_battery_id.h>
 #endif
 
@@ -136,12 +139,7 @@
 #define LT_CABLE_130K		7
 #define LT_CABLE_910K		11
 
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-#define THERMALE_NOT_TRIGGER -1
-#define THERMALE_ALL_CLEAR 0
-#endif
-
-#ifdef CONFIG_LGE_PM_VZW_LLK
+#ifdef CONFIG_LGE_PM_LLK_MODE
 bool battemp_work_cancel = false;
 bool llk_mode = false;
 #endif
@@ -155,9 +153,9 @@ bool llk_mode = false;
 static inline struct power_supply *_psy_check_ext(struct power_supply *_psy,
 					const char *_psp_name)
 {
-	if(!likely(_psy)) {
+	if (!likely(_psy)) {
 		pr_info("psp is not found %s\n", _psp_name);
-		_psy = power_supply_get_by_name((char*)_psp_name);
+		_psy = power_supply_get_by_name((char *)_psp_name);
 	}
 	return _psy;
 }
@@ -228,18 +226,11 @@ static const char * const bq24296_chg_status[] = {
 	"full"
 	"exception"
 };
-#define NULL_CHECK_VOID(p)  \
-			if (!(p)) { \
-				pr_err("FATAL (%s)\n", __func__); \
-				return ; \
-			}
-#define NULL_CHECK(p, err)  \
-			if (!(p)) { \
-				pr_err("FATAL (%s)\n", __func__); \
-				return err; \
-			}
+#define NULL_CHECK_VOID(p) if (!(p)) { pr_err("FATAL (%s)\n", __func__); return; }
+#define NULL_CHECK(p, err) if (!(p)) { pr_err("FATAL (%s)\n", __func__); return err; }
 
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
+/* WTF IS A PHIHONG ???? */
 typedef enum {
 	PHIHONG_PLUG_OUT,
 	PHIHONG_NOT_VERIFIED,
@@ -250,30 +241,31 @@ typedef enum {
 	PHIHONG_NO,
 	PHIHONG_NO_NEED,
 	PHIHONG_STATUS_MAX,
-}phihong_status;
-#define CHECK_PHIHONG(_chip)						\
-	({								\
-		int ret = 0;						\
-		if(_chip->phihong == PHIHONG_VERIFYING ||		\
-			_chip->phihong == PHIHONG_VERIFYING_PLUG_OUT ||	\
-			_chip->phihong == PHIHONG_YES ||		\
-			_chip->phihong == PHIHONG_PERMANENT_YES) {	\
-			ret = 1;					\
-		}							\
-		ret;							\
+} phihong_status;
+#define CHECK_PHIHONG(_chip)                                            \
+	({                                                              \
+		int ret = 0;                                            \
+		if (_chip->phihong == PHIHONG_VERIFYING ||              \
+			_chip->phihong == PHIHONG_VERIFYING_PLUG_OUT || \
+			_chip->phihong == PHIHONG_YES ||                \
+			_chip->phihong == PHIHONG_PERMANENT_YES) {      \
+			ret = 1;                                        \
+		}                                                       \
+		ret;                                                    \
 	})
 #endif
 
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 typedef enum vzw_chg_state {
 	VZW_NO_CHARGER,
 	VZW_NORMAL_CHARGING,
-	VZW_NOT_CHARGING,
+	VZW_INCOMPATIBLE_CHARGING,
 	VZW_UNDER_CURRENT_CHARGING,
 	VZW_USB_DRIVER_UNINSTALLED,
 	VZW_CHARGER_STATUS_MAX,
-}chg_state;
+} chg_state;
 #endif
+
 struct bq24296_chip {
 	struct i2c_client  *client;
 	struct dentry  *dent;
@@ -289,7 +281,7 @@ struct bq24296_chip {
 	int ext_chg_en;
 	int otg_en;
 	int irq;
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	int wlc_present;
 #endif
 	int usb_present;
@@ -315,16 +307,9 @@ struct bq24296_chip {
 	enum   lge_btm_states	btm_state;
 	int pseudo_ui_chg;
 	int otp_ibat_current;
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
-	int chg_current_te;
-#endif
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-	int wlc_input_current_te;
-	int wlc_chg_current_te;
-#endif
 #endif
 	struct wake_lock  chg_wake_lock;
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	struct power_supply  *wlc_psy;
 #endif
 	struct power_supply  *usb_psy;
@@ -339,7 +324,7 @@ struct bq24296_chip {
 	struct wake_lock battgone_wake_lock;
 	struct wake_lock chg_timeout_lock;
 	struct qpnp_vadc_chip *vadc_dev;
-#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 	int batt_id_smem;
 #endif
 	bool watchdog;
@@ -351,27 +336,29 @@ struct bq24296_chip {
 	struct mutex usbin_lock;
 	int			usbin_ref_count;
 	int			last_usbin_mv;
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	chg_state		vzw_chg_mode;
 	unsigned int	adc_sum;
 	int			usbin_ref_count_vzw;
+	struct delayed_work		slow_charging_check_work;
+	int			retry_count;
 #endif
 	bool batt_present;
-#if defined(CONFIG_LGE_PM_VZW_LLK)
+#ifdef CONFIG_LGE_PM_LLK_MODE
 	bool store_demo_enabled;
 #endif
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
 	struct timer_list phihong_timer;
 	int pre_input_current_ma;
 	phihong_status phihong;
 	struct task_struct *phihong_task;
 	struct completion phihong_complete;
 #endif
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	bool	wlc_otg;
 	otg_fake_status wlc_otg_status;
 #endif
-#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
+#ifdef NEED_PM_WORKAROUND
 	struct delayed_work pma_workaround_work;
 	struct wake_lock pma_workaround_wake_lock;
 #endif
@@ -381,7 +368,13 @@ struct bq24296_chip {
 int last_batt_temp;
 #endif
 
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+int safety_timer_enabled;
+
+#ifdef CONFIG_LGE_PM_USB_CURRENT_MAX_MODE
+static int usb_current_max_enabled = 0;
+#endif
+
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 static int wireless_charging;
 #endif
 
@@ -415,6 +408,7 @@ static int bq24296_enable_charging(struct bq24296_chip *chip, bool enable);
 static int bq24296_set_adjust_ibat(struct bq24296_chip *chip, int ma);
 static int bq24296_get_adjust_ibat(struct bq24296_chip *chip, int *mv);
 static int bq24296_get_force_ichg_decrease(struct bq24296_chip *chip, int *enable);
+static bool bq24296_is_charger_present(struct bq24296_chip *chip);
 /* end of pre-define */
 
 static unsigned int cable_type;
@@ -518,12 +512,12 @@ static void bq24296_reginfo(struct bq24296_chip *chip)
 		bq24296_read_reg(chip->client,
 			bq24296_debug_regs[i].reg, &val[i]);
 
-	pr_debug("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
+	pr_info("0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X 0x%02X\n",
 		val[0], val[1], val[2], val[3], val[4],
 		val[5], val[6], val[7], val[8], val[9]);
 }
 
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 static int bq24296_get_en_hiz(struct bq24296_chip *chip, bool *enable)
 {
 	int ret;
@@ -573,49 +567,15 @@ static struct input_ma_limit_entry icl_ma_table[] = {
 	{3000, 0x07},
 };
 
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
-static int iusb_control;
-static int
-bq24296_set_iusb_control(const char *val, struct kernel_param *kp)
-{
-	int ret;
-
-	ret = param_set_int(val, kp);
-	if (ret) {
-		pr_err("error setting value %d\n", ret);
-		return ret;
-	}
-
-	return 0;
-}
-module_param_call(iusb_control, bq24296_set_iusb_control,
-	param_get_uint, &iusb_control, 0644);
-#endif
-
 #define INPUT_CURRENT_LIMIT_MIN_MA  100
 #define INPUT_CURRENT_LIMIT_MAX_MA  3000
 #define INPUT_CURRENT_LIMIT_TA      2000
 #define INPUT_CURRENT_LIMIT_FACTORY 2000
 #define INPUT_CURRENT_LIMIT_USB20   500
 #define INPUT_CURRENT_LIMIT_USB30   900
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-/* G3 HW requirement */
-/* In wireless charging, change Iusb. */
-#if		defined(CONFIG_MACH_MSM8974_G3_KR) || \
-		defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || \
-		defined(CONFIG_MACH_MSM8974_G3_SPR_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_USC_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_TMO_US)
-#define INPUT_CURRENT_LIMIT_WLC		900	/* IDT IDT9025A(WPC) 900mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-#define INPUT_CURRENT_LIMIT_WLC		900	/* TI BQ51020(WPC) 900mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
-#define INPUT_CURRENT_LIMIT_WLC		900	/* TI BQ51221(PMA) 900mA */
-#else
-#define INPUT_CURRENT_LIMIT_WLC		900	/* Other 900mA */
-#endif
-
-#define INPUT_CURRENT_LIMIT_WLC_ADJUST	500
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
+#define INPUT_CURRENT_LIMIT_WLC		900	/* 900mA */
+#define INPUT_CURRENT_LIMIT_WLC_ADJUST	500	/* 500mA */
 #endif
 static int bq24296_set_input_i_limit(struct bq24296_chip *chip, int ma)
 {
@@ -629,19 +589,17 @@ static int bq24296_set_input_i_limit(struct bq24296_chip *chip, int ma)
 				BQ00_INPUT_SRC_CONT_REG, IINLIM_MASK, 0x02);
 		} else {
 			pr_info("factory cable detected  iLimit 1500mA\n");
+#ifdef CONFIG_LGE_PM_CHARGING_TABLET
+			bq24296_enable_charging(chip,false);
+#endif
 			return bq24296_masked_write(chip->client,
 				BQ00_INPUT_SRC_CONT_REG, IINLIM_MASK, 0x06);
 		}
 	}
-#if defined(CONFIG_VZW_POWER_REQ)
-	bq24296_set_en_hiz(chip, (chip->usb_psy->is_floated_charger &&
-		(ma <= 0) && chip->usb_present) ? true : false);
-#endif
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
-	if (ma > iusb_control && iusb_control >= INPUT_CURRENT_LIMIT_USB30 &&
-			ma >= INPUT_CURRENT_LIMIT_USB30) {
-		ma = iusb_control;
-		pr_info("IUSB limit %dmA\n",iusb_control);
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+	if (chip->usb_psy->is_floated_charger && !chip->wlc_present) {
+		pr_info("IUSB limit %dmA due to the floated charger.\n", INPUT_CURRENT_LIMIT_USB20);
+		ma = INPUT_CURRENT_LIMIT_USB20;
 	}
 #endif
 
@@ -676,35 +634,14 @@ static int bq24296_get_input_i_limit(struct bq24296_chip *chip, int *ma)
 #define IBAT_DIS_MA  (100)
 #define IBAT_STEP_MA  64
 #define IBAT_DEFAULT  2048
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-/* G3 HW requirement */
-/* In wireless charging, change Ibat. */
-#if		defined(CONFIG_MACH_MSM8974_G3_KR) || \
-		defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || \
-		defined(CONFIG_MACH_MSM8974_G3_SPR_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_USC_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_TMO_US)
-#define IBAT_WLC			896		/* IDT IDT9025A(WPC) 896mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-#define IBAT_WLC			896		/* TI BQ51020(WPC) 896mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
-#define IBAT_WLC			896		/* TI BQ51221(PMA) 896mA */
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
+#define IBAT_WLC			896		/* 896mA */
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+#define IBAT_WLC_ADJUST		704		/* 704mA */
+#elif defined(CONFIG_MACH_LGE)
+#define IBAT_WLC_ADJUST		768		/* 768mA */
 #else
-#define IBAT_WLC			896		/* Other 896mA */
-#endif
-
-#if		defined(CONFIG_MACH_MSM8974_G3_KR) || \
-		defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || \
-		defined(CONFIG_MACH_MSM8974_G3_SPR_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_USC_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_TMO_US)
-#define IBAT_WLC_ADJUST		768		/* IDT IDT9025A(WPC) 768mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-#define IBAT_WLC_ADJUST		512		/* TI BQ51020(WPC) 512mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
-#define IBAT_WLC_ADJUST		768		/* TI BQ51221(PMA) 768mA */
-#else
-#define IBAT_WLC_ADJUST		512		/* Other 512mA */
+#define IBAT_WLC_ADJUST		512		/* 512mA */
 #endif
 #endif
 static int bq24296_set_ibat_max(struct bq24296_chip *chip, int ma)
@@ -718,7 +655,7 @@ static int bq24296_set_ibat_max(struct bq24296_chip *chip, int ma)
 			BQ02_CHARGE_CUR_CONT_REG, ICHG_MASK, 0x5c);
 	}
 	if (ma < IBAT_MIN_MA) {
-		bq24296_enable_charging(chip,false);
+		bq24296_enable_charging(chip, false);
 		ma = IBAT_MIN_MA;
 	} else {
 		bq24296_enable_charging(chip, true);
@@ -731,7 +668,7 @@ static int bq24296_set_ibat_max(struct bq24296_chip *chip, int ma)
 	set_ibat = reg_val * IBAT_STEP_MA + IBAT_MIN_MA;
 	reg_val = reg_val << 2;
 	chip->set_chg_current_ma = set_ibat;
-	pr_debug("req_ibat = %d set_ibat = %d reg_val = 0x%02x\n",
+	pr_info("req_ibat = %d set_ibat = %d reg_val = 0x%02x\n",
 				ma, set_ibat, reg_val);
 
 	return bq24296_masked_write(chip->client, BQ02_CHARGE_CUR_CONT_REG,
@@ -771,21 +708,13 @@ static int bq24296_get_adjust_ibat(struct bq24296_chip *chip, int *mv)
 #define VIN_LIMIT_MIN_MV  3880
 #define VIN_LIMIT_MAX_MV  5080
 #define VIN_LIMIT_STEP_MV  80
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-/* G3 HW requirement */
-/* In wireless charging, change Vin limit. */
-#if		defined(CONFIG_MACH_MSM8974_G3_KR) || \
-		defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || \
-		defined(CONFIG_MACH_MSM8974_G3_SPR_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_USC_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_TMO_US)
-#define VIN_LIMIT_WLC	4840	/* IDT IDT9025A(WPC) 4.84V */
-#elif	defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-#define VIN_LIMIT_WLC	5080	/* TI BQ51020(WPC) 5.08V */
-#elif	defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
-#define VIN_LIMIT_WLC	4520	/* TI BQ51221(PMA) 4.52V */
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+#define VIN_LIMIT_WLC	5080	/* 5.08V */
+#elif defined(CONFIG_MACH_LGE)
+#define VIN_LIMIT_WLC	4840	/* 4.84V */
 #else
-#define VIN_LIMIT_WLC	4520	/* Other 4.52V(Charger default) */
+#define VIN_LIMIT_WLC	4520	/* 4.52V */
 #endif
 #endif
 static int bq24296_set_input_vin_limit(struct bq24296_chip *chip, int mv)
@@ -902,21 +831,11 @@ static int bq24296_set_prechg_i_limit(struct bq24296_chip *chip, int ma)
 #define ITERM_MIN_MA  128
 #define ITERM_MAX_MA  2048
 #define ITERM_STEP_MA  128
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-/* G3 HW requirement */
-/* In wireless charging, change Iterm. */
-#if		defined(CONFIG_MACH_MSM8974_G3_KR) || \
-		defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || \
-		defined(CONFIG_MACH_MSM8974_G3_SPR_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_USC_US) || \
-		defined(CONFIG_MACH_MSM8974_G3_TMO_US)
-#define ITERM_MA_WLC	256		/* IDT IDT9025A(WPC) 256mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-#define ITERM_MA_WLC	128		/* TI BQ51020(WPC) 128mA */
-#elif	defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
-#define ITERM_MA_WLC	256		/* TI BQ51221(PMA) 256mA */
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
+#if defined(CONFIG_MACH_LGE) && !defined(CONFIG_MACH_MSM8974_G3_VZW)
+#define ITERM_MA_WLC	256		/* 256mA */
 #else
-#define ITERM_MA_WLC	128		/* Other 128mA(Charger default) */
+#define ITERM_MA_WLC	128		/* 128mA */
 #endif
 #endif
 static int bq24296_set_term_current(struct bq24296_chip *chip, int ma)
@@ -947,6 +866,7 @@ static int bq24296_set_chg_timer(struct bq24296_chip *chip, bool enable)
 	NULL_CHECK(chip, -EINVAL);
 
 	pr_info("enable=%d\n", enable);
+	safety_timer_enabled = enable;
 
 	ret = bq24296_masked_write(chip->client, BQ05_CHARGE_TERM_TIMER_CONT_REG,
 						EN_CHG_TIMER_MASK, val);
@@ -958,7 +878,7 @@ static int bq24296_set_chg_timer(struct bq24296_chip *chip, bool enable)
 	return 0;
 }
 
-#if !defined(CONFIG_MACH_MSM8974_G3_VZW)
+#ifndef CONFIG_MACH_MSM8974_G3_VZW
 #define CHG_TIMEOUT_SHIFT 1
 static int bq24296_set_chg_timeout(struct bq24296_chip *chip)
 {
@@ -1035,7 +955,7 @@ static bool bq24296_is_charger_present(struct bq24296_chip *chip)
 	power_good = (sys_status & PG_STAT_MASK);
 	sys_status &= VBUS_STAT_MASK;
 
-	if ((power_good == 0) && (sys_status == 0 || sys_status == 0xC0)) {
+	if (power_good == 0) {
 		power_ok = false;
 		pr_debug("DC is missing.\n");
 	} else {
@@ -1105,10 +1025,16 @@ static int bq24296_get_force_ichg_decrease(struct bq24296_chip *chip, int *enabl
 static int bq24296_enable_charging(struct bq24296_chip *chip, bool enable)
 {
 	int ret;
-	u8 val = (u8)(!!enable << CHG_ENABLE_SHIFT);
+	u8 val;
 	NULL_CHECK(chip, -EINVAL);
 
-	pr_debug("enable=%d\n", enable);
+#ifdef CONFIG_LGE_PM_LLK_MODE
+	if (chip->charging_disabled)
+		enable = false;
+#endif
+	val = (u8)(!!enable << CHG_ENABLE_SHIFT);
+
+	pr_info("enable=%d\n", enable);
 
 	if (chip->chg_timeout) {
 		pr_err("charging timeout state, never enabel charging\n");
@@ -1121,8 +1047,9 @@ static int bq24296_enable_charging(struct bq24296_chip *chip, bool enable)
 		pr_err("failed to set CHG_CONFIG ret=%d\n", ret);
 		return ret;
 	}
-
+#ifndef CONFIG_LGE_PM_LLK_MODE
 	chip->charging_disabled = !enable;
+#endif
 
 	return 0;
 }
@@ -1212,21 +1139,21 @@ static void bq24296_usbin_mon_worker(struct work_struct *work)
 	union power_supply_propval val = {0,};
 
 	NULL_CHECK_VOID(chip);
-	if(!chip->usb_present) {
+	if (!chip->usb_present) {
 		goto out;
 	}
 	cur_dcin = bq24296_get_usbin_adc(chip);
 	cur_dcin = ROUND_uA(cur_dcin);
 	conv_mv = ROUND_mA(chip->icl_vbus_mv);
 
-	if(cur_dcin >= conv_mv) {
+	if (cur_dcin >= conv_mv) {
 		/* normal case
 		  * VBUS is greater than DPM threshold
 		  * Let charging of full current
 		  * nothing to do
 		  */
 		  pr_info("\n\n normal case : %d\n\n", chip->usbin_ref_count);
-		  if(chip->usbin_ref_count > 0) {
+		  if (chip->usbin_ref_count > 0) {
 		/* check previous status
 		 * if previous status is abnormal..
 		 * reschedule work q
@@ -1234,13 +1161,13 @@ static void bq24296_usbin_mon_worker(struct work_struct *work)
 			goto out;
 		  }
 
-	} else if(cur_dcin > threshold && cur_dcin < conv_mv) {
+	} else if (cur_dcin > threshold && cur_dcin < conv_mv) {
 		/* abnormal case #1
 		  * VBUS is smaller than DPM threshold but greater than
 		  * Verizon non-authority TA
 		  * Let Charging as 800mA
 		  */
-		if(chip->last_usbin_mv <= cur_dcin) {
+		if (chip->last_usbin_mv <= cur_dcin) {
 			/* working properly now I think..*/
 			pr_info("\n\nDCIN Volt is good : last : %d  now : %d\n\n",
 				chip->last_usbin_mv, cur_dcin);
@@ -1258,8 +1185,7 @@ static void bq24296_usbin_mon_worker(struct work_struct *work)
 			pr_info("\n\nabnormal TA detected..!set %dmA\n\n", val.intval);
 			return;
 		}
-	}
-	else if(cur_dcin <= threshold) {
+	} else if (cur_dcin <= threshold) {
 		pr_info("\n\n abnormal charger!!! \n\n");
 		return;
 	}
@@ -1268,13 +1194,14 @@ out:
 	mutex_lock(&chip->usbin_lock);
 	chip->last_usbin_mv = ROUND_mA(chip->icl_vbus_mv);
 	chip->usbin_ref_count = 0;
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	chip->usbin_ref_count_vzw = 0;
 #endif
 	mutex_unlock(&chip->usbin_lock);
 }
 
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
+/* still dunno wtf a phihong is...whatever... */
 static void phihong_timer_func_finish(unsigned long data)
 {
 	struct bq24296_chip *chip = (struct bq24296_chip *)data;
@@ -1289,6 +1216,7 @@ static void phihong_timer_func_finish(unsigned long data)
 	}
 	complete(&chip->phihong_complete);
 }
+
 static void phihong_timer_func_start(unsigned long data)
 {
 	struct bq24296_chip *chip = (struct bq24296_chip *)data;
@@ -1299,11 +1227,16 @@ static void phihong_timer_func_start(unsigned long data)
 	complete(&chip->phihong_complete);
 	power_supply_changed(chip->psy_this);
 }
+
 static void trig_phihong_timer(struct bq24296_chip *chip)
 {
+	static int usb_present;
+
+	usb_present = bq24296_is_charger_present(chip);
 	del_timer(&chip->phihong_timer);
-	if (chip->phihong == PHIHONG_PERMANENT_YES ||
-		chip->phihong == PHIHONG_NO) {
+	if ((!usb_present && chip->phihong == PHIHONG_NOT_VERIFIED) ||
+			chip->phihong == PHIHONG_PERMANENT_YES ||
+			chip->phihong == PHIHONG_NO) {
 		phihong_timer_func_finish((unsigned long) chip);
 		return;
 	}
@@ -1311,22 +1244,22 @@ static void trig_phihong_timer(struct bq24296_chip *chip)
 	chip->phihong_timer.function = phihong_timer_func_start;
 	add_timer(&chip->phihong_timer);
 }
+
 static void cancel_phihong_timer(struct bq24296_chip *chip)
 {
 	del_timer(&chip->phihong_timer);
 }
+
 static __ref int do_phihong_checker(void *data)
 {
 	struct bq24296_chip *chip = (struct bq24296_chip *)data;
 	static int count = 0;
 	static int usb_present;
 	while (!kthread_should_stop()) {
-		while (wait_for_completion_interruptible(
-			&chip->phihong_complete) != 0)
-			;
+		wait_for_completion(&chip->phihong_complete);
 		INIT_COMPLETION(chip->phihong_complete);
 		usb_present = bq24296_is_charger_present(chip);
-		switch(chip->phihong) {
+		switch (chip->phihong) {
 		case PHIHONG_PLUG_OUT:
 			count = 0;
 			if (usb_present) {
@@ -1372,7 +1305,6 @@ static __ref int do_phihong_checker(void *data)
 		pr_debug("phihong = %d <<<<\n", chip->phihong);
 	}
 	return 0;
-
 }
 #endif
 
@@ -1382,14 +1314,14 @@ static void bq24296_irq_worker(struct work_struct *work)
 		container_of(work, struct bq24296_chip, irq_work.work);
 	u8 reg08, reg09;
 	int ret = 0, usb_present = 0;
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	int wlc_present = 0;
 	union power_supply_propval wlc_ret = {0,};
 #endif
 	/* temporary debug for interrupts */
 	pr_err("%s : occured\n", __func__);
 	NULL_CHECK_VOID(chip);
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	if (bq24296_is_en_hiz(chip))
 		bq24296_set_en_hiz(chip, false);
 #endif
@@ -1455,7 +1387,7 @@ static void bq24296_irq_worker(struct work_struct *work)
 	}
 
 	usb_present = bq24296_is_charger_present(chip);
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	bq24296_charger_psy_getprop_event(chip, wlc_psy, WIRELESS_ONLINE,
 		&wlc_ret, _WIRELESS_);
 	wlc_present = wireless_charging || wlc_ret.intval;
@@ -1464,7 +1396,13 @@ static void bq24296_irq_worker(struct work_struct *work)
 #else
 	if (chip->usb_present ^ usb_present) {
 #endif
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+		if (likely(delayed_work_pending(&chip->slow_charging_check_work))) {
+			cancel_delayed_work(&chip->slow_charging_check_work);
+		}
+		chip->retry_count = 0;
+#endif
+#ifdef CONFIG_MACH_MSM8974_G3
 		complete(&chip->phihong_complete);
 #endif
 #ifdef CONFIG_ZERO_WAIT
@@ -1484,7 +1422,7 @@ static void bq24296_irq_worker(struct work_struct *work)
 		if (usb_present == 0 && chip->icl_idx > 0 && bootcompleted) {
 			pr_info("input_limit_worker exception\n");
 		} else {
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 			if (wlc_present) {
 				pr_err("[WLC] set usb_present to 0 \n");
 				chip->usb_present = 0;
@@ -1527,18 +1465,15 @@ static void bq24296_check_suspended_worker(struct work_struct *work)
 		container_of(work, struct bq24296_chip, check_suspended_work.work);
 	NULL_CHECK_VOID(chip);
 
-	if (chip->suspend)
-       {
-	       pr_debug("bq24296 suspended. try i2c operation after 100ms.\n");
-	       schedule_delayed_work(&chip->check_suspended_work, msecs_to_jiffies(100));
-       }
-       else
-       {
-	       pr_debug("bq24296 resumed. do bq24296_irq.\n");
-	       schedule_delayed_work(&chip->irq_work, 0);
-       }
+	if (chip->suspend) {
+		pr_debug("bq24296 suspended. try i2c operation after 100ms.\n");
+		schedule_delayed_work(&chip->check_suspended_work, msecs_to_jiffies(100));
+	} else {
+		pr_debug("bq24296 resumed. do bq24296_irq.\n");
+		schedule_delayed_work(&chip->irq_work, 0);
+	}
 }
-#endif //I2C_SUSPEND_WORKAROUND
+#endif /* I2C_SUSPEND_WORKAROUND */
 
 static int set_reg(void *data, u64 val)
 {
@@ -1614,7 +1549,6 @@ static enum power_supply_property bq24296_power_props[] = {
 	POWER_SUPPLY_PROP_CHARGE_TYPE,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED,
 	POWER_SUPPLY_PROP_CHARGING_COMPLETE,
-	POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER,
 };
 
 static enum power_supply_property bq24296_batt_power_props[] = {
@@ -1633,13 +1567,17 @@ static enum power_supply_property bq24296_batt_power_props[] = {
 	POWER_SUPPLY_PROP_TEMP,
 	POWER_SUPPLY_PROP_PSEUDO_BATT,
 	POWER_SUPPLY_PROP_EXT_PWR_CHECK,
+	POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER,
 #ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 	POWER_SUPPLY_PROP_BATTERY_ID_CHECKER,
 #endif
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	POWER_SUPPLY_PROP_VZW_CHG,
 #endif
-#if defined(CONFIG_LGE_PM_VZW_LLK)
+#ifdef CONFIG_LGE_PM_USB_CURRENT_MAX_MODE
+        POWER_SUPPLY_PROP_USB_CURRENT_MAX_MODE,
+#endif
+#ifdef CONFIG_LGE_PM_LLK_MODE
 	POWER_SUPPLY_PROP_STORE_DEMO_ENABLED,
 #endif
 };
@@ -1651,7 +1589,7 @@ static int bq24296_get_prop_charge_type(struct bq24296_chip *chip)
 	u8 sys_status;
 	enum bq24296_chg_status status;
 	int chg_type = POWER_SUPPLY_CHARGE_TYPE_UNKNOWN;
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	union power_supply_propval wlc_ret = {0,};
 #endif
 	NULL_CHECK(chip, -EINVAL);
@@ -1681,7 +1619,7 @@ static int bq24296_get_prop_charge_type(struct bq24296_chip *chip)
 		if (status == BQ_CHG_STATUS_NONE
 			|| status == BQ_CHG_STATUS_FULL) {
 			pr_debug("Charging stopped.\n");
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 			if (chip->wlc_present && ((sys_status & FAST_CHARGE_MASK) && (sys_status & PRE_CHARGE_MASK))) {
 				bq24296_charger_psy_setprop_event(chip, wlc_psy,
 					WIRELESS_CHARGE_COMPLETED,
@@ -1695,8 +1633,8 @@ static int bq24296_get_prop_charge_type(struct bq24296_chip *chip)
 		}
 		chip->chg_status = status;
 	}
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-	if(gpio_get_value(chip->otg_en) == 1
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
+	if (gpio_get_value(chip->otg_en) == 1
 		&& chip->wlc_otg_status == FAKE_DISCONNECTION){
 		//pr_info("\n\n\n[ FAKE_DISCONNECTION ]\n\n\n");
 		chg_type = BQ_CHG_STATUS_NONE;
@@ -1813,7 +1751,7 @@ static int bq24296_get_prop_batt_capacity(struct bq24296_chip *chip)
 static int bq24296_get_prop_batt_current_now(struct bq24296_chip *chip)
 {
 	int batt_current = 0;
-#if defined(CONFIG_LGE_CURRENTNOW)
+#ifdef CONFIG_LGE_CURRENTNOW
 	union power_supply_propval ret = {0,};
 
 	if (!chip->cn_psy)
@@ -1947,27 +1885,46 @@ static int bq24296_batt_power_get_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_EXT_PWR_CHECK:
 		val->intval = lge_pm_get_cable_type();
 		break;
-#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+	case POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER:
+	{
+		int ret;
+		u8 value = 0;
+		ret = bq24296_read_reg(chip->client, BQ05_CHARGE_TERM_TIMER_CONT_REG, &value);
+		if (ret) {
+			pr_err("failed to read BQ05_CHARGE_TERM_TIMER_CONT_REG ret=%d\n", ret);
+			return -EINVAL;
+		}
+		val->intval = (value >> 3) & 0x01;
+		pr_info("get charger_timeout : %d[D]\n", val->intval);
+	}
+		break;
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 	case POWER_SUPPLY_PROP_BATTERY_ID_CHECKER:
-		if (is_factory_cable())
+		if (is_factory_cable() && bq24296_is_charger_present(chip))
 			val->intval = 1;
 		else
 			val->intval = chip->batt_id_smem;
 		break;
 #endif
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	case POWER_SUPPLY_PROP_VZW_CHG:
-		val->intval = chip->vzw_chg_mode;
+		val->intval = bq24296_is_charger_present(chip) ?
+			chip->vzw_chg_mode : VZW_NO_CHARGER;
 		break;
 #endif
-#if defined(CONFIG_LGE_PM_VZW_LLK)
+#ifdef CONFIG_LGE_PM_LLK_MODE
 	case POWER_SUPPLY_PROP_STORE_DEMO_ENABLED:
 		val->intval = chip->store_demo_enabled;
-		if(val->intval)
+		if (val->intval)
 			llk_mode = true;
 		else
 			llk_mode = false;
 	break;
+#endif
+#ifdef CONFIG_LGE_PM_USB_CURRENT_MAX_MODE
+	case POWER_SUPPLY_PROP_USB_CURRENT_MAX_MODE :
+		val->intval = usb_current_max_enabled;
+		break;
 #endif
 	default:
 		return -EINVAL;
@@ -1985,7 +1942,8 @@ static int bq24296_batt_power_set_property(struct power_supply *psy,
 	NULL_CHECK(chip, -EINVAL);
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
-#if defined(CONFIG_LGE_PM_VZW_LLK)
+#ifdef CONFIG_LGE_PM_LLK_MODE
+		chip->charging_disabled = !val->intval;
 	if (llk_mode) {
 		if (val->intval) {
 			battemp_work_cancel = false;
@@ -2008,6 +1966,10 @@ static int bq24296_batt_power_set_property(struct power_supply *psy,
 		 * it is good interface to use LG mitigation level.
 		 */
 		break;
+	case POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER:
+		bq24296_set_chg_timer(chip, ((val->intval == 0) ? false : true));
+		pr_info("charger_timeout : %d[D]\n", val->intval);
+		break;
 #if defined CONFIG_VZW_POWER_REQ
 	case POWER_SUPPLY_PROP_VZW_CHG:
 		#define vzw_max_lmt (500)
@@ -2016,16 +1978,21 @@ static int bq24296_batt_power_set_property(struct power_supply *psy,
 		bq24296_set_input_i_limit(chip, vzw_max_lmt);
 		/* charging current */
 		bq24296_set_adjust_ibat(chip, vzw_cc);
-		pr_debug("\n\nadjust charging current of slow charging : 400mA\n\n");
+		pr_info("\n\nadjust charging current of slow charging : 400mA\n\n");
 		power_supply_changed(&chip->batt_psy);
 
 		#undef vzw_max_lmt
 		#undef vzw_cc
 		break;
 #endif
-#if defined(CONFIG_LGE_PM_VZW_LLK)
+#ifdef CONFIG_LGE_PM_LLK_MODE
 	case POWER_SUPPLY_PROP_STORE_DEMO_ENABLED:
 		chip->store_demo_enabled = val->intval;
+		break;
+#endif
+#ifdef CONFIG_LGE_PM_USB_CURRENT_MAX_MODE
+	case POWER_SUPPLY_PROP_USB_CURRENT_MAX_MODE :
+		usb_current_max_enabled = val->intval;
 		break;
 #endif
 	default:
@@ -2045,6 +2012,10 @@ bq24296_batt_power_property_is_writeable(struct power_supply *psy,
 	switch (psp) {
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 	case POWER_SUPPLY_PROP_SYSTEM_TEMP_LEVEL:
+	case POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER:
+#ifdef CONFIG_LGE_PM_USB_CURRENT_MAX_MODE
+	case POWER_SUPPLY_PROP_USB_CURRENT_MAX_MODE:
+#endif
 		return 1;
 	default:
 		break;
@@ -2052,34 +2023,11 @@ bq24296_batt_power_property_is_writeable(struct power_supply *psy,
 
 	return 0;
 }
-#if 0
-static int bq24296_get_dpm_stat(struct bq24296_chip *chip, int* dpm)
-{
-	u8 reg_val = 0;
-	int ret;
 
-	NULL_CHECK(chip, -EINVAL);
-	ret = bq24296_read_reg(chip->client, BQ08_SYSTEM_STATUS_REG, &reg_val);
-	if (ret) {
-		pr_err("failed to read BQ08_SYSTEM_STATUS_REG ret=%d\n", ret);
-		return -EIO;
-	}
-	*dpm = (reg_val & DPM_STAT_MASK) >> 3;
-	return ret;
-}
-
-static bool bq24296_is_dpm_enabled(struct bq24296_chip *chip)
-{
-	int dpm;
-	bq24296_get_dpm_stat(chip, &dpm);
-	return dpm;
-}
-#endif
-
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
 static void bq24296_set_phihong_current(struct bq24296_chip *chip, int ma)
 {
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	union power_supply_propval wlc_ret = {0,};
 	if (wireless_charging) {
 		bq24296_charger_psy_getprop_event(chip, wlc_psy,
@@ -2090,7 +2038,6 @@ static void bq24296_set_phihong_current(struct bq24296_chip *chip, int ma)
 		}
 	}
 #endif
-
 	switch (chip->phihong) {
 	case PHIHONG_PLUG_OUT:
 	case PHIHONG_NOT_VERIFIED:
@@ -2112,7 +2059,8 @@ static void bq24296_set_phihong_current(struct bq24296_chip *chip, int ma)
 	}
 }
 #endif
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 static void bq24296_wlc_otg_fake_proc(struct bq24296_chip *chip)
 {
 	uint8_t otg_status = gpio_get_value(chip->otg_en);
@@ -2122,20 +2070,19 @@ static void bq24296_wlc_otg_fake_proc(struct bq24296_chip *chip)
 	bq24296_charger_psy_getprop_event(chip, wlc_psy, WIRELESS_ONLINE,
 		&wlc_ret, _WIRELESS_);
 
-	if(!wlc_ret.intval)
+	if (!wlc_ret.intval)
 		return;
 
-	if(otg_status == 1 && chip->wlc_otg_status == FAKE_UNKNOWN) {
-		// fake remove wlc
+	if (otg_status == 1 && chip->wlc_otg_status == FAKE_UNKNOWN) {
+		/* fake remove wlc */
 		wlc_ret.intval = FAKE_DISCONNECTION;
 		chip->wlc_otg_status = FAKE_DISCONNECTION;
 		chip->wlc_psy->set_event_property(chip->wlc_psy,
 					POWER_SUPPLY_PROP_WIRELESS_FAKE_OTG, &wlc_ret);
 		bq24296_enable_charging(chip, false);
 		//pr_info("\n\n [FAKE DISCONNECTING....]\n\n");
-	}
-	else if(otg_status == 0 && chip->wlc_otg_status == FAKE_DISCONNECTION){
-		// fake online wlc
+	} else if (otg_status == 0 && chip->wlc_otg_status == FAKE_DISCONNECTION) {
+		/* fake online wlc */
 		wlc_ret.intval = FAKE_CONNECTING;
 		chip->wlc_otg_status = FAKE_UNKNOWN;
 		chip->wlc_psy->set_event_property(chip->wlc_psy,
@@ -2143,8 +2090,7 @@ static void bq24296_wlc_otg_fake_proc(struct bq24296_chip *chip)
 		bq24296_enable_charging(chip, true);
 		//pr_info("\n\n [FAKE ONLINE...]\n\n");
 
-	}
-	else{
+	} else {
 		/* nothing to do */
 	}
 }
@@ -2152,7 +2098,7 @@ static void bq24296_wlc_otg_fake_proc(struct bq24296_chip *chip)
 static void bq24296_decide_otg_mode(struct bq24296_chip *chip)
 {
 	union power_supply_propval ret = {0,};
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	union power_supply_propval wlc_ret = {0,};
 #endif
 	hw_rev_type boardrev = lge_get_board_revno();
@@ -2161,11 +2107,11 @@ static void bq24296_decide_otg_mode(struct bq24296_chip *chip)
 
 	chip->usb_psy->get_property(chip->usb_psy,
 					  POWER_SUPPLY_PROP_SCOPE, &ret);
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	chip->wlc_psy = _psy_check_ext(chip->wlc_psy, _WIRELESS_);
 	NULL_CHECK_VOID(chip->wlc_psy);
 #endif
-	if(boardrev < HW_REV_1_0) {
+	if (boardrev < HW_REV_1_0) {
 		if (ret.intval == POWER_SUPPLY_SCOPE_SYSTEM
 					&& !bq24296_is_otg_mode(chip)) {
 			gpio_set_value(chip->otg_en, 1);
@@ -2175,12 +2121,11 @@ static void bq24296_decide_otg_mode(struct bq24296_chip *chip)
 			gpio_set_value(chip->otg_en, 0);
 			bq24296_enable_otg(chip, false);
 		}
-	}
-	else {
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+	} else {
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 		bq24296_charger_psy_getprop_event(chip, wlc_psy,
 			WIRELESS_ONLINE, &wlc_ret, _WIRELESS_);
-		if(wlc_ret.intval) {
+		if (wlc_ret.intval) {
 			if (ret.intval == POWER_SUPPLY_SCOPE_SYSTEM
 					&& !gpio_get_value(chip->otg_en)) {
 				gpio_set_value(chip->otg_en, 1);
@@ -2191,8 +2136,7 @@ static void bq24296_decide_otg_mode(struct bq24296_chip *chip)
 				bq24296_enable_otg(chip, false);
 			}
 			bq24296_wlc_otg_fake_proc(chip);
-		}
-		else {
+		} else {
 			if (ret.intval == POWER_SUPPLY_SCOPE_SYSTEM
 						&& !bq24296_is_otg_mode(chip)) {
 				gpio_set_value(chip->otg_en, 1);
@@ -2217,7 +2161,7 @@ static void bq24296_decide_otg_mode(struct bq24296_chip *chip)
 	}
 }
 
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 
 /* ADC_TO_IINMAX: IINMAX = (1V/RILIM) x KLIM
  * VZW_UNDER_CURRENT_CHARGING_MA: Threshold current level
@@ -2230,28 +2174,22 @@ static void bq24296_decide_otg_mode(struct bq24296_chip *chip)
 
 #define	ADC_TO_IINMAX(x) (((int)(x)*198)/100)
 #define VZW_UNDER_CURRENT_CHARGING_MA	400000
+#define VZW_UNDER_CURRENT_CHARGING_A	(VZW_UNDER_CURRENT_CHARGING_MA/1000)
 #define VZW_UNDER_CURRENT_CHARGING_DETECT_MV	4200000
-static void VZW_CHG_director(struct bq24296_chip *chip)
+#define VZW_UNDER_CURRENT_CHARGING_DELAY msecs_to_jiffies(1000)
+#define VZW_UNDER_CURRENT_CHARGING_CHECK_RETRIES 2
+static void slow_charging_check_worker(struct work_struct *work)
 {
+	struct bq24296_chip *chip =
+		container_of(work, struct bq24296_chip, slow_charging_check_work.work);
 	struct qpnp_vadc_result result;
 	struct power_supply *psy = NULL;
 	union power_supply_propval val = {0, };
 
-	bq24296_charger_psy_getprop(chip, psy_this, PRESENT, &val);
-	if (!val.intval)
-		goto normal_charger;
+	pr_err("%s\n", __func__);
 
-	/* Invalid charger detect */
-	if (lge_get_board_revno() < HW_REV_1_0)
-		goto normal_charger;
-	bq24296_charger_psy_getprop(chip, usb_psy, ONLINE, &val);
-	if (chip->usb_psy->is_floated_charger && !val.intval) {
-		chip->vzw_chg_mode = VZW_NOT_CHARGING;
-		pr_info("VZW invalid charging detected!!\n");
-		goto exit;
-	}
+	NULL_CHECK_VOID(chip);
 
-	/* slow charger detect */
 	psy = _psy_check_ext(psy, _BATTERY_);
 
 	if (likely(psy))
@@ -2259,25 +2197,86 @@ static void VZW_CHG_director(struct bq24296_chip *chip)
 	else
 		goto normal_charger;
 	if (val.intval > VZW_UNDER_CURRENT_CHARGING_DETECT_MV)
-		//goto normal_charger;
-		goto exit;
-	qpnp_vadc_read(chip->vadc_dev, LR_MUX4_AMUX_THM1, &result);
+		goto normal_charger;
+	bq24296_charger_psy_getprop(chip, psy_this, CURRENT_MAX, &val);
+	if (val.intval < VZW_UNDER_CURRENT_CHARGING_A)
+		goto normal_charger;
+	bq24296_charger_psy_getprop(chip, psy_this, CHARGING_ENABLED, &val);
+	if (!val.intval)
+		goto normal_charger;
 	bq24296_charger_psy_getprop(chip, usb_psy, TYPE, &val);
-	if ((val.intval == POWER_SUPPLY_TYPE_USB_DCP) &&
-			(ADC_TO_IINMAX(result.physical) <
-				VZW_UNDER_CURRENT_CHARGING_MA)) {
-		chip->vzw_chg_mode = VZW_UNDER_CURRENT_CHARGING;
-		pr_info("VZW slow charging detected!!\n");
-		goto exit;
+	if (val.intval != POWER_SUPPLY_TYPE_USB_DCP)
+		goto normal_charger;
+
+	qpnp_vadc_read(chip->vadc_dev, LR_MUX4_AMUX_THM1, &result);
+	if (ADC_TO_IINMAX(result.physical) < VZW_UNDER_CURRENT_CHARGING_MA) {
+		if (chip->retry_count < VZW_UNDER_CURRENT_CHARGING_CHECK_RETRIES) {
+			pr_err("slow charging count = %d\n", chip->retry_count);
+			schedule_delayed_work(&chip->slow_charging_check_work,
+				VZW_UNDER_CURRENT_CHARGING_DELAY);
+			chip->retry_count++;
+		}
+		else {
+			if (likely(delayed_work_pending(&chip->slow_charging_check_work))) {
+				cancel_delayed_work(&chip->slow_charging_check_work);
+			}
+			chip->vzw_chg_mode = VZW_UNDER_CURRENT_CHARGING;
+			pr_err("slow charging detect!!\n");
+			chip->retry_count = 0;
+		}
+		power_supply_changed(&chip->batt_psy);
+		return;
 	}
 
 normal_charger:
+	pr_err("slow_charging_check_worker : normal charger detected!!\n");
+	if (likely(delayed_work_pending(&chip->slow_charging_check_work))) {
+		cancel_delayed_work(&chip->slow_charging_check_work);
+	}
 	bq24296_charger_psy_getprop(chip, psy_this, PRESENT, &val);
 	if (val.intval)
 		chip->vzw_chg_mode = VZW_NORMAL_CHARGING;
 	else
 		chip->vzw_chg_mode = VZW_NO_CHARGER;
-exit:
+	chip->retry_count = 0;
+	power_supply_changed(&chip->batt_psy);
+}
+
+static void VZW_CHG_director(struct bq24296_chip *chip)
+{
+	union power_supply_propval val = {0, };
+
+	bq24296_charger_psy_getprop(chip, psy_this, PRESENT, &val);
+	if (!val.intval) {
+		chip->vzw_chg_mode = VZW_NO_CHARGER;
+		return;
+	}
+
+	/* USB driver uninstalled detect */
+	if (chip->usb_psy->is_usb_driver_uninstall) {
+		chip->vzw_chg_mode = VZW_USB_DRIVER_UNINSTALLED;
+		pr_info("VZW usb driver uninstall detected!!\n");
+		return;
+	}
+
+	/* Invalid charger detect */
+	if (lge_get_board_revno() < HW_REV_1_0) {
+		if (val.intval)
+			chip->vzw_chg_mode = VZW_NORMAL_CHARGING;
+		else
+			chip->vzw_chg_mode = VZW_NO_CHARGER;
+		return;
+	}
+
+	if (chip->usb_psy->is_floated_charger) {
+		chip->vzw_chg_mode = VZW_INCOMPATIBLE_CHARGING;
+		pr_info("VZW invalid charging detected!!\n");
+		return;
+	}
+
+	/* slow charger detect */
+	schedule_delayed_work(&chip->slow_charging_check_work, 0);
+
 	return;
 }
 #endif
@@ -2287,7 +2286,7 @@ static void bq24296_batt_external_power_changed(struct power_supply *psy)
 	struct bq24296_chip *chip = container_of(psy,
 					struct bq24296_chip, batt_psy);
 	union power_supply_propval ret = {0,};
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	union power_supply_propval wlc_ret = {0,};
 #endif
 	int	busy_wait = 20;
@@ -2301,16 +2300,16 @@ static void bq24296_batt_external_power_changed(struct power_supply *psy)
 		     <workQ pending -> kernel resume -> WorkQ resumt
 		     -> invoke power supply changed
 	*/
-	if(chip->suspend) {
+	if (chip->suspend) {
 		/* In suspend, busy waiting... till resume */
-		do{
-			if(!chip->suspend || busy_wait == 0)
+		do {
+			if (!chip->suspend || busy_wait == 0)
 				break;
 			--busy_wait;
 			/* max 400ms */
 			msleep(20);
 			pr_info("\n\n busy waiting.... till resume \n\n");
-		} while(true);
+		} while (true);
 	}
 
 	bq24296_charger_psy_getprop(chip, usb_psy, CURRENT_MAX, &ret);
@@ -2318,20 +2317,19 @@ static void bq24296_batt_external_power_changed(struct power_supply *psy)
 	ret.intval = ret.intval / 1000; /* dwc3 treats uA */
 	pr_info("dwc3 result=%dmA\n", ret.intval);
 
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
 	complete(&chip->phihong_complete);
 	bq24296_set_phihong_current(chip, ret.intval);
-#else
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-	if (wireless_charging) {
-		bq24296_charger_psy_getprop_event(chip, wlc_psy,
-			WIRELESS_ONLINE, &wlc_ret, _WIRELESS_);
-		if (wlc_ret.intval) {
-			ret.intval = INPUT_CURRENT_LIMIT_WLC;
-			pr_info("[WLC] Change dwc3 result to %dmA\n", ret.intval);
-		}
+	chip->batt_psy.get_property(&chip->batt_psy,
+			POWER_SUPPLY_PROP_USB_CURRENT_MAX_MODE, &ret);
+	usb_current_max_enabled = ret.intval;
+	/* For MST, boost current up over 900mA in spite of USB */
+	if ((safety_timer_enabled == 0 || usb_current_max_enabled) && ret.intval < 900) {
+		ret.intval = 900;
+		bq24296_charger_psy_setprop(chip, psy_this, INPUT_CURRENT_MAX, ret.intval);
+		pr_info("safety timer disabled.... input current limit = %d\n",ret.intval);
 	}
-#endif
+#else
 	/* For MST, boost current up over 900mA in spite of USB */
 	if (pseudo_batt_info.mode && ret.intval < 900)
 		ret.intval = 900;
@@ -2365,7 +2363,7 @@ static void bq24296_batt_external_power_changed(struct power_supply *psy)
 	else
 		bq24296_set_input_vin_limit(chip, chip->vin_limit_mv);
 
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	if (wireless_charging) {
 		bq24296_charger_psy_getprop_event(chip, wlc_psy,
 			WIRELESS_ONLINE, &wlc_ret, _WIRELESS_);
@@ -2375,19 +2373,13 @@ static void bq24296_batt_external_power_changed(struct power_supply *psy)
 
 			bq24296_charger_psy_getprop_event(chip, wlc_psy,
 				WIRELESS_THERMAL_MITIGATION, &wlc_ret, _WIRELESS_);
-			if (wlc_ret.intval == THERMALE_NOT_TRIGGER ||
-				wlc_ret.intval == THERMALE_ALL_CLEAR) {
+			if (wlc_ret.intval == -1 ||
+				wlc_ret.intval == 0) {
 				pr_info("[WLC] Set inuput current limit %d mA\n", INPUT_CURRENT_LIMIT_WLC);
 				bq24296_set_input_i_limit(chip, INPUT_CURRENT_LIMIT_WLC);
 
 				pr_info("[WLC] Set charging current %d mA\n", IBAT_WLC);
 				bq24296_set_adjust_ibat(chip, IBAT_WLC);
-			} else {
-				pr_info("[WLC] Set inuput current limit %d mA\n", chip->wlc_input_current_te);
-				bq24296_set_input_i_limit(chip, chip->wlc_input_current_te);
-
-				pr_info("[WLC] Set charging current %d mA\n", chip->wlc_chg_current_te);
-				bq24296_set_adjust_ibat(chip, chip->wlc_chg_current_te);
 			}
 		} else {
 			pr_err("[WLC] GPIO SWING\n");
@@ -2395,7 +2387,7 @@ static void bq24296_batt_external_power_changed(struct power_supply *psy)
 	}
 #endif
 
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	VZW_CHG_director(chip);
 #endif
 	power_supply_changed(&chip->batt_psy);
@@ -2418,8 +2410,8 @@ static int bq24296_power_get_property(struct power_supply *psy,
 		bq24296_get_input_i_limit(chip, &val->intval);
 		break;
 	case POWER_SUPPLY_PROP_PRESENT:
-#if defined(CONFIG_SUPPORT_PHIHONG)
-		if(CHECK_PHIHONG(chip)) {
+#ifdef CONFIG_MACH_MSM8974_G3
+		if (CHECK_PHIHONG(chip)) {
 			val->intval = 1;
 			break;
 		}
@@ -2439,19 +2431,6 @@ static int bq24296_power_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED:
 		bq24296_get_input_vin_limit(chip, &val->intval);
-		break;
-	case POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER:
-	{
-		int ret;
-		u8 value = 0;
-		ret = bq24296_read_reg(chip->client, BQ05_CHARGE_TERM_TIMER_CONT_REG, &value);
-		if (ret) {
-			pr_err("failed to read BQ05_CHARGE_TERM_TIMER_CONT_REG ret=%d\n", ret);
-			return -EINVAL;
-		}
-		val->intval = (value >> 3) & 0x01;
-		pr_info("get charger_timeout : %d[D]\n", val->intval);
-	}
 		break;
 	case POWER_SUPPLY_PROP_CHARGING_COMPLETE:
 		if (bq24296_get_prop_batt_capacity(chip) == 100)
@@ -2481,6 +2460,9 @@ static int bq24296_power_set_property(struct power_supply *psy,
 		chip->ac_online = val->intval;
 		break;
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
+#ifdef CONFIG_LGE_PM_LLK_MODE
+		chip->charging_disabled = !val->intval;
+#endif
 		bq24296_enable_charging(chip, val->intval);
 		power_supply_changed(&chip->batt_psy);
 		break;
@@ -2492,12 +2474,6 @@ static int bq24296_power_set_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_SETTLED:
 		bq24296_force_ichg_decrease(chip, val->intval);
-		break;
-	case POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER:
-#if !defined(CONFIG_CHARGER_FACTORY_MODE)
-		bq24296_set_chg_timer(chip, ((val->intval == 0) ? false : true));
-		pr_info("charger_timeout : %d[D]\n", val->intval);
-#endif
 		break;
 	default:
 		return -EINVAL;
@@ -2515,8 +2491,8 @@ static int bq24296_power_get_event_property(struct power_supply *psy,
 
 	NULL_CHECK(chip, -EINVAL);
 
-	switch(psp) {
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+	switch (psp) {
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	case POWER_SUPPLY_PROP_WIRELESS_ONLINE_OTG:
 		pr_info("[WLC] get wlc otg mode : %d\n", chip->wlc_otg);
 		val->intval = chip->wlc_otg;
@@ -2547,7 +2523,9 @@ static int bq24296_power_get_event_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_FLOATED_CHARGER:
 		val->intval = psy->is_floated_charger;
 		break;
-
+	case POWER_SUPPLY_PROP_DRIVER_UNINSTALL:
+		val->intval = psy->is_usb_driver_uninstall;
+		break;
 	default:
 		break;
 	}
@@ -2563,25 +2541,19 @@ static int bq24296_power_set_event_property(struct power_supply *psy,
 						struct bq24296_chip,
 						ac_psy);
 
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	int vin_limit_wlc;
 	int iterm_wlc;
 	int ret;
 #endif
-
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-	int wlc_thermal_mitigation = -1;
-	int i;
-#endif
-
 	NULL_CHECK(chip, -EINVAL);
 
-	switch(psp) {
+	switch (psp) {
 	case POWER_SUPPLY_PROP_ABNORMAL_TA:
 		bq24296_set_input_i_limit(chip, 1000);
 		bq24296_set_adjust_ibat(chip, val->intval);
 		break;
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	case POWER_SUPPLY_PROP_WIRELESS_ONLINE_OTG:
 		chip->wlc_otg = val->intval;
 		break;
@@ -2628,38 +2600,6 @@ static int bq24296_power_set_event_property(struct power_supply *psy,
 		wake_lock_timeout(&chip->uevent_wake_lock, HZ*2);
 		power_supply_set_present(chip->usb_psy, val->intval);
 		break;
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-	case POWER_SUPPLY_PROP_WIRELESS_THERMAL_MITIGATION:
-		wlc_thermal_mitigation = val->intval;
-
-		if (wlc_thermal_mitigation == THERMALE_ALL_CLEAR) {
-			chip->wlc_input_current_te = INPUT_CURRENT_LIMIT_WLC;
-		} else if (wlc_thermal_mitigation >= IBAT_MIN_MA && wlc_thermal_mitigation <= IBAT_WLC_ADJUST) {
-			chip->wlc_input_current_te = INPUT_CURRENT_LIMIT_WLC_ADJUST;
-		} else {
-			/* When WLC thermal mitigation is triggered, upscaling input current limit. */
-			for (i = 0; i < ARRAY_SIZE(icl_ma_table) - 1; i++) {
-				if (wlc_thermal_mitigation <= icl_ma_table[i].icl_ma)
-					break;
-			}
-			chip->wlc_input_current_te = icl_ma_table[i].icl_ma;
-		}
-
-		if (wlc_thermal_mitigation == THERMALE_ALL_CLEAR) {
-			chip->wlc_chg_current_te = IBAT_WLC;
-		} else if (wlc_thermal_mitigation >= IBAT_MIN_MA && wlc_thermal_mitigation <= IBAT_WLC_ADJUST) {
-			chip->wlc_chg_current_te = IBAT_WLC_ADJUST;
-		} else {
-			chip->wlc_chg_current_te = wlc_thermal_mitigation;
-		}
-
-		pr_info("thermal-engine set wlc_input_current_te = %d, wlc_chg_current_te = %d\n",
-			chip->wlc_input_current_te, chip->wlc_chg_current_te);
-
-		cancel_delayed_work_sync(&chip->battemp_work);
-		schedule_delayed_work(&chip->battemp_work, HZ*1);
-		break;
-#endif
 #endif
 	default:
 		break;
@@ -2677,7 +2617,6 @@ bq24296_power_property_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 	case POWER_SUPPLY_PROP_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
-	case POWER_SUPPLY_PROP_SAFTETY_CHARGER_TIMER:
 		return 1;
 	default:
 		break;
@@ -2885,7 +2824,7 @@ static int bq24296_set_adjust_ibat(struct bq24296_chip *chip, int ma)
 		bq24296_set_ibat_max(chip, ma);
 		bq24296_force_ichg_decrease(chip, 0);
 	}
-	pr_debug("charging current limit=%d\n", ma);
+	pr_info("charging current limit=%d\n", ma);
 	return 0;
 }
 
@@ -2909,28 +2848,13 @@ bq24296_set_thermal_chg_current_set(const char *val, struct kernel_param *kp)
 		return 0;
 	}
 
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
-	pr_info("thermal-engine set chg current to %d\n",
-			bq24296_thermal_mitigation);
-
-	the_chip->chg_current_te = bq24296_thermal_mitigation;
-
-	cancel_delayed_work_sync(&the_chip->battemp_work);
-#ifdef CONFIG_LGE_PM_VZW_LLK
-	if(!battemp_work_cancel)
-		schedule_delayed_work(&the_chip->battemp_work, HZ*1);
-#else
-	schedule_delayed_work(&the_chip->battemp_work, HZ*1);
-#endif
-#else
 	pr_err("thermal-engine chg current control not enabled\n");
-#endif
 	return 0;
 }
 module_param_call(bq24296_thermal_mitigation, bq24296_set_thermal_chg_current_set,
 	param_get_uint, &bq24296_thermal_mitigation, 0644);
 
-#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
+#ifdef NEED_PM_WORKAROUND
 static void pma_workaround_worker(struct work_struct *work)
 {
 	struct bq24296_chip *chip =
@@ -2945,23 +2869,9 @@ static void pma_workaround_worker(struct work_struct *work)
 		pr_err("[WLC] unset pma workaround\n");
 	}
 
-	if (wake_lock_active(&chip->pma_workaround_wake_lock)) {;
+	if (wake_lock_active(&chip->pma_workaround_wake_lock)) {
 		wake_unlock(&chip->pma_workaround_wake_lock);
 		pr_err("[WLC] unset pma wake lock\n");
-	}
-}
-
-static void pma_workaround(struct bq24296_chip *chip, int temp)
-{
-	if (temp >= 55) {
-		gpio_set_value(chip->otg_en, 1);
-		bq24296_enable_otg(chip, true);
-		pr_err("[WLC] set pma workaround\n");
-
-		schedule_delayed_work(&chip->pma_workaround_work, 15 * HZ);
-		wake_lock(&chip->pma_workaround_wake_lock);
-		pr_err("[WLC] set pma wake lock\n");
-		pr_err("[WLC] after 15sec, unset pma workaround\n");
 	}
 }
 #endif
@@ -2975,13 +2885,6 @@ static void bq24296_monitor_batt_temp(struct work_struct *work)
 	struct charging_rsp res;
 	bool is_changed = false;
 	union power_supply_propval ret = {0,};
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-	union power_supply_propval wlc_ret = {0,};
-	int wlc_online = -1;
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-	int wlc_thermal_mitigation = -1;
-#endif
-#endif
 	NULL_CHECK_VOID(chip);
 	if (chip->chg_timeout) {
 		int ret;
@@ -3008,57 +2911,22 @@ static void bq24296_monitor_batt_temp(struct work_struct *work)
 			  POWER_SUPPLY_PROP_CURRENT_NOW, &ret);
 	req.current_now = ret.intval;
 
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
-	bq24296_thermal_mitigation = chip->chg_current_ma;
-	req.chg_current_ma = chip->chg_current_ma;
-	req.chg_current_te = chip->chg_current_te;
-
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-	bq24296_charger_psy_getprop_event(chip, wlc_psy, WIRELESS_ONLINE,
-		&wlc_ret, _WIRELESS_);
-	wlc_online = wlc_ret.intval;
-
-	if(wlc_online) {
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
-		pma_workaround(chip, req.batt_temp);
-#endif
-		bq24296_charger_psy_getprop_event(chip, wlc_psy,
-			WIRELESS_THERMAL_MITIGATION, &wlc_ret, _WIRELESS_);
-		wlc_thermal_mitigation = wlc_ret.intval;
-
-		/* When WLC tharmal mitigation is not triggered first yet. */
-		if (wlc_thermal_mitigation == THERMALE_NOT_TRIGGER) {
-			chip->wlc_input_current_te = INPUT_CURRENT_LIMIT_WLC;
-			chip->wlc_chg_current_te = IBAT_WLC;
-		}
-
-		req.input_current_te = chip->wlc_input_current_te;
-		req.chg_current_te = chip->wlc_chg_current_te;
-
-		/* In WLC tharmal mitigation, adjust wireless charging Iin limit.*/
-		pr_info("thermal-engine set req.input_current_te = %d\n",
-			req.input_current_te);
-		bq24296_set_input_i_limit(chip, req.input_current_te);
-#else
-		req.chg_current_te = IBAT_WLC;
-#endif
-	}
-
-#endif
-	pr_debug("thermal-engine set req.chg_current_ma = %d, req.chg_current_te = %d\n",
-		req.chg_current_ma, req.chg_current_te);
-#endif
-
 	req.is_charger = bq24296_is_charger_present(chip);
+
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+	if (!req.is_charger) {
+		bq24296_set_en_hiz(chip, false);
+	}
+#endif
 
 	lge_monitor_batt_temp(req, &res);
 
 	if (((res.change_lvl != STS_CHE_NONE) && req.is_charger) ||
 		(res.force_update == true)) {
 		if (res.change_lvl == STS_CHE_NORMAL_TO_DECCUR ||
-			(res.force_update == true && res.state == CHG_BATT_DECCUR_STATE &&
-			res.dc_current != DC_CURRENT_DEF
+			((res.force_update == true) && (res.state == CHG_BATT_DECCUR_STATE) &&
+			(res.dc_current != DC_CURRENT_DEF) &&
+			(res.change_lvl != STS_CHE_STPCHG_TO_DECCUR)
 			)) {
 			chip->otp_ibat_current = res.dc_current;
 		} else if (res.change_lvl == STS_CHE_NORMAL_TO_STPCHG ||
@@ -3077,17 +2945,15 @@ static void bq24296_monitor_batt_temp(struct work_struct *work)
 			chip->otp_ibat_current = res.dc_current;
 			bq24296_enable_charging(chip, !res.disable_chg);
 			wake_unlock(&chip->lcs_wake_lock);
-		}
-		else if (res.change_lvl == STS_CHE_STPCHG_TO_DECCUR) {
+		} else if (res.change_lvl == STS_CHE_STPCHG_TO_DECCUR) {
 			chip->otp_ibat_current = res.dc_current;
 			wake_unlock(&chip->lcs_wake_lock);
-		}
-		else if (res.force_update == true && res.state == CHG_BATT_NORMAL_STATE &&
+		} else if (res.force_update == true && res.state == CHG_BATT_NORMAL_STATE &&
 			res.dc_current != DC_CURRENT_DEF) {
 			chip->otp_ibat_current = res.dc_current;
 		}
 	}
-	pr_debug(" otp_ibat_current=%d\n", chip->otp_ibat_current);
+	pr_info(" otp_ibat_current=%d\n", chip->otp_ibat_current);
 	bq24296_set_adjust_ibat(chip, chip->chg_current_ma);
 	if (chip->pseudo_ui_chg ^ res.pseudo_chg_ui) {
 		is_changed = true;
@@ -3264,25 +3130,6 @@ static int bq24296_hw_init(struct bq24296_chip *chip)
 		pr_err("failed to set vbat max\n");
 		return ret;
 	}
-#if defined(CONFIG_CHARGER_FACTORY_MODE)
-		ret = bq24296_set_chg_term(chip, 1);
-		if (ret) {
-			pr_err("failed to disable chg termination\n");
-			return ret;
-		}
-		ret = bq24296_set_chg_timer(chip, 0);
-		if (ret) {
-			pr_err("failed to enable chg safety timer\n");
-			return ret;
-		}
-#if !defined(CONFIG_MACH_MSM8974_G3_VZW)
-		ret = bq24296_set_chg_timeout(chip);
-		if (ret) {
-			pr_err("Failed to set CHG_TIMEOUT rc=%d\n", ret);
-			return ret;
-		}
-#endif
-#else
 		ret = bq24296_set_chg_term(chip, 1);
 		if (ret) {
 			pr_err("failed to enable chg termination\n");
@@ -3294,13 +3141,12 @@ static int bq24296_hw_init(struct bq24296_chip *chip)
 			pr_err("failed to enable chg safety timer\n");
 			return ret;
 		}
-#if !defined(CONFIG_MACH_MSM8974_G3_VZW)
+#ifndef CONFIG_MACH_MSM8974_G3_VZW
 		ret = bq24296_set_chg_timeout(chip);
 		if (ret) {
 			pr_err("Failed to set CHG_TIMEOUT rc=%d\n", ret);
 			return ret;
 		}
-#endif
 #endif
 	return 0;
 }
@@ -3339,17 +3185,13 @@ static int bq24296_parse_dt(struct device_node *dev_node,
 
 	ret = of_property_read_u32(dev_node, "ti,chg-current-ma",
 				   &(chip->chg_current_ma));
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
-	bq24296_thermal_mitigation = chip->chg_current_ma;
-	chip->chg_current_te = chip->chg_current_ma;
-#endif
 	pr_debug("bq24296 chg_current_ma = %d.\n",
 			chip->chg_current_ma);
 	if (ret) {
 		pr_err("Unable to read chg-current-ma.\n");
 		return ret;
 	}
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
 	ret = of_property_read_u32(dev_node, "ti,pre-input-current-ma",
 				   &(chip->pre_input_current_ma));
 	pr_debug("bq24296 pre_input_current-ma = %d.\n",
@@ -3435,9 +3277,9 @@ static int bq24296_probe(struct i2c_client *client,
 	struct device_node *dev_node = client->dev.of_node;
 	struct bq24296_chip *chip;
 	int ret = 0;
-#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 	uint *smem_batt = 0;
-#if defined(CONFIG_LGE_LOW_BATT_LIMIT)
+#ifdef CONFIG_LGE_LOW_BATT_LIMIT
 	uint _smem_batt_ = 0;
 #endif
 #endif
@@ -3474,16 +3316,14 @@ static int bq24296_probe(struct i2c_client *client,
 
 	chip->client = client;
 	chip->batt_present = true;
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	chip->vzw_chg_mode = VZW_NO_CHARGER;
 #endif
-
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
 	chip->phihong = PHIHONG_NOT_VERIFIED;
 	init_completion(&chip->phihong_complete);
 #endif
-
-#if defined(CONFIG_LGE_CURRENTNOW)
+#ifdef CONFIG_LGE_CURRENTNOW
 	chip->cn_psy = power_supply_get_by_name("cn");
 	if (!chip->cn_psy) {
 		pr_err("cn supply not found deferring probe\n");
@@ -3568,7 +3408,7 @@ static int bq24296_probe(struct i2c_client *client,
 	i2c_set_clientdata(client, chip);
 
 	ret = bq24296_hw_init(chip);
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	chip->wlc_otg_status = FAKE_UNKNOWN;
 #endif
 	if (ret) {
@@ -3592,7 +3432,7 @@ static int bq24296_probe(struct i2c_client *client,
 			       WAKE_LOCK_SUSPEND, "chg timeout");
 	wake_lock_init(&chip->icl_wake_lock,
 			       WAKE_LOCK_SUSPEND, "icl_wake_lock");
-#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
+#ifdef NEED_PM_WORKAROUND
 	wake_lock_init(&chip->pma_workaround_wake_lock,
 		       WAKE_LOCK_SUSPEND, "pma_wake_lock");
 #endif
@@ -3611,14 +3451,17 @@ static int bq24296_probe(struct i2c_client *client,
 	INIT_DELAYED_WORK(&chip->check_suspended_work,
 			bq24296_check_suspended_worker);
 #endif
-#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
+#ifdef NEED_PM_WORKAROUND
 	INIT_DELAYED_WORK(&chip->pma_workaround_work, pma_workaround_worker);
+#endif
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+	INIT_DELAYED_WORK(&chip->slow_charging_check_work, slow_charging_check_worker);
 #endif
 
 	mutex_init(&chip->usbin_lock);
 	chip->usbin_ref_count = 0;
 	chip->last_usbin_mv = ROUND_mA(chip->icl_vbus_mv);
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	chip->usbin_ref_count_vzw = chip->adc_sum = 0;
 #endif
 	ret = switch_dev_register(&chip->batt_removed);
@@ -3638,14 +3481,14 @@ static int bq24296_probe(struct i2c_client *client,
 		goto err_init_ac_psy;
 	}
 
-#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 	smem_batt = (uint *)smem_alloc(SMEM_BATT_INFO, sizeof(smem_batt));
 	if (smem_batt == NULL) {
-		pr_err("%s : smem_alloc returns NULL\n",__func__);
+		pr_err("%s : smem_alloc returns NULL\n", __func__);
 		chip->batt_id_smem = 0;
 	} else {
-#if defined(CONFIG_LGE_LOW_BATT_LIMIT)
-		_smem_batt_ = (*smem_batt >>8) & 0x00ff; /* batt id -> HSB */
+#ifdef CONFIG_LGE_LOW_BATT_LIMIT
+		_smem_batt_ = (*smem_batt >> 8) & 0x00ff; /* batt id -> HSB */
 		pr_info("Battery was read in sbl is = %d\n", _smem_batt_);
 		if (_smem_batt_ == BATT_ID_DS2704_L ||
 			_smem_batt_ == BATT_ID_DS2704_C ||
@@ -3676,9 +3519,19 @@ static int bq24296_probe(struct i2c_client *client,
 		if (is_factory_cable_130k()) {
 			pr_info("factory cable detected(130k) iLimit 500mA\n");
 			bq24296_set_input_i_limit(chip, INPUT_CURRENT_LIMIT_USB20);
+#ifdef CONFIG_LGE_PM_CHARGING_TABLET
+			ret = bq24296_set_term_current(chip, 128);
+			if (ret) {
+				pr_err("failed to set charge termination current\n");
+				return ret;
+			}
+#endif
 		} else {
 			pr_info("factory cable detected  iLimit 1500mA\n");
 			bq24296_set_input_i_limit(chip, INPUT_CURRENT_LIMIT_FACTORY);
+#ifdef CONFIG_LGE_PM_CHARGING_TABLET
+			bq24296_enable_charging(chip,false);
+#endif
 			bq24296_force_ichg_decrease(chip, 1);
 		}
 	}
@@ -3739,6 +3592,8 @@ static int bq24296_probe(struct i2c_client *client,
 	last_batt_temp = DEFAULT_TEMP;
 #endif
 
+	safety_timer_enabled = 1;
+
 #ifdef CONFIG_LGE_CHARGER_TEMP_SCENARIO
 	schedule_delayed_work(&chip->battemp_work,
 		MONITOR_BATTEMP_POLLING_PERIOD / 3);
@@ -3749,16 +3604,17 @@ static int bq24296_probe(struct i2c_client *client,
 	if (ret < 0)
 		goto err_zw_ws_register;
 #endif
-#if defined(CONFIG_SUPPORT_PHIHONG)
+#ifdef CONFIG_MACH_MSM8974_G3
+	init_timer(&chip->phihong_timer);
+	chip->phihong_timer.data = (unsigned long) chip;
+	trig_phihong_timer(chip);
+
 	chip->phihong_task = kthread_run(do_phihong_checker, chip,
 			"bq24296:phihong_checker");
 	if (IS_ERR(chip->phihong_task)) {
 		pr_err("Fail to create phihong detector thread");
 		goto probe_fail;
 	}
-	init_timer(&chip->phihong_timer);
-	chip->phihong_timer.data = (unsigned long) chip;
-	trig_phihong_timer(chip);
 #endif
 	if (ret)
 		goto probe_fail;
@@ -3783,7 +3639,7 @@ err_debugfs:
 err_init_ac_psy:
 	power_supply_unregister(&chip->batt_psy);
 err_init_batt_psy:
-#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
+#ifdef NEED_PM_WORKAROUND
 	wake_lock_destroy(&chip->pma_workaround_wake_lock);
 #endif
 	wake_lock_destroy(&chip->icl_wake_lock);
@@ -3826,7 +3682,7 @@ static int bq24296_remove(struct i2c_client *client)
 #endif
 	wake_lock_destroy(&chip->battgone_wake_lock);
 	wake_lock_destroy(&chip->icl_wake_lock);
-#if defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_CA)
+#ifdef NEED_PM_WORKAROUND
 	wake_lock_destroy(&chip->pma_workaround_wake_lock);
 #endif
 
@@ -3840,6 +3696,9 @@ static int bq24296_remove(struct i2c_client *client)
 	if (chip->otg_en)
 		gpio_free(chip->otg_en);
 
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+	bq24296_set_en_hiz(chip, false);
+#endif
 	kfree(chip);
 	chip = NULL;
 	the_chip = NULL;
@@ -3858,6 +3717,15 @@ static const struct of_device_id bq24296_match[] = {
 };
 
 #ifdef CONFIG_PM
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+static void bq24296_shutdown(struct i2c_client *client)
+{
+	struct bq24296_chip *chip = i2c_get_clientdata(client);
+	NULL_CHECK_VOID(chip);
+	bq24296_set_en_hiz(chip, false);
+}
+#endif
+
 static int bq24296_resume(struct i2c_client *client)
 {
 	struct bq24296_chip *chip = i2c_get_clientdata(client);
@@ -3887,6 +3755,9 @@ static struct i2c_driver bq24296_driver = {
 	.remove		= bq24296_remove,
 	.id_table	= bq24296_id,
 #ifdef CONFIG_PM
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
+	.shutdown	= bq24296_shutdown,
+#endif
 	.resume		= bq24296_resume,
 	.suspend	= bq24296_suspend,
 #endif

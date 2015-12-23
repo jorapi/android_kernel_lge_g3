@@ -29,8 +29,11 @@ void of_i2c_register_devices(struct i2c_adapter *adap)
 
 	dev_dbg(&adap->dev, "of_i2c: walking child nodes\n");
 
-	//for_each_child_of_node(adap->dev.of_node, node) {
+#ifdef CONFIG_MACH_LGE
 	for_each_available_child_of_node(adap->dev.of_node, node) {
+#else
+	for_each_child_of_node(adap->dev.of_node, node) {
+#endif
 		struct i2c_board_info info = {};
 		struct dev_archdata dev_ad = {};
 		const __be32 *addr;
@@ -39,9 +42,6 @@ void of_i2c_register_devices(struct i2c_adapter *adap)
 		dev_dbg(&adap->dev, "of_i2c: register %s\n", node->full_name);
 
 #ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE: check status=okay for i2c child node
-		 * 2012-11-07, bongkyu.kim@lge.com
-		 */
 		if (!of_device_is_available(node))
 			continue;
 

@@ -1014,18 +1014,6 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	BUG_ON(!host);
 	WARN_ON(!host->claimed);
 
-	#ifdef CONFIG_MACH_LGE
-	/* LGE_UPDATE
-	 * When uSD is not inserted, return proper error-value.
-	 * 2014/01/16, B2-BSP-FS@lge.com
-	 */
-	if (!mmc_cd_get_status(host)) {
-		printk(KERN_INFO "[LGE][MMC][%-18s( )] sd-no-exist. skip next\n", __func__);
-		err = -ENOMEDIUM;
-		return err;
-	}
-	#endif
-
 	/* The initialization should be done at 3.3 V I/O voltage. */
 	mmc_set_signal_voltage(host, MMC_SIGNAL_VOLTAGE_330, 0);
 
@@ -1057,6 +1045,7 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 		err = mmc_send_relative_addr(host, &card->rca);
 		if (err)
 			return err;
+		host->card = card;
 	}
 
 	if (!oldcard) {
@@ -1126,12 +1115,13 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 		}
 	}
 
-	host->card = card;
 	return 0;
 
 free_card:
-	if (!oldcard)
+	if (!oldcard) {
+		host->card = NULL;
 		mmc_remove_card(card);
+	}
 
 	return err;
 }
@@ -1144,11 +1134,11 @@ static void mmc_sd_remove(struct mmc_host *host)
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
+	mmc_exit_clk_scaling(host);
 	mmc_remove_card(host->card);
 
 	mmc_claim_host(host);
 	host->card = NULL;
-	mmc_exit_clk_scaling(host);
 	mmc_release_host(host);
 }
 
@@ -1166,14 +1156,8 @@ static int mmc_sd_alive(struct mmc_host *host)
 static void mmc_sd_detect(struct mmc_host *host)
 {
 	int err = 0;
-#ifdef CONFIG_MACH_LGE
-	/* LGE_UPDATE
-	 * for fixing compile-warning
-	 * 2014-01/16, B2-BSP-FS@lge.com
-	 */
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
         int retries = 5;
-#endif
 #endif
 
 	BUG_ON(!host);
@@ -1185,7 +1169,6 @@ static void mmc_sd_detect(struct mmc_host *host)
 	/*
 	 * Just check if our card has been removed.
 	 */
-
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	while(retries) {
 		err = mmc_send_status(host->card, NULL);
@@ -1204,7 +1187,6 @@ static void mmc_sd_detect(struct mmc_host *host)
 #else
 	err = _mmc_detect_card_removed(host);
 #endif
-
 	mmc_release_host(host);
 
 	/*
@@ -1268,17 +1250,6 @@ static int mmc_sd_resume(struct mmc_host *host)
 	retries = 5;
 	while (retries) {
 		err = mmc_sd_init_card(host, host->ocr, host->card);
-
-		#ifdef CONFIG_MACH_LGE
-			/* LGE_CHANGE
-			* Skip below When ENOMEDIUM
-			* 2014-01-16, B2-BSP-FS@lge.com
-			*/
-			if (err == -ENOMEDIUM) {
-				printk(KERN_INFO "[LGE][MMC][%-18s( )] error:ENOMEDIUM\n", __func__);
-				break;
-			}
-		#endif
 
 		if (err) {
 			printk(KERN_ERR "%s: Re-init card rc = %d (retries = %d)\n",
@@ -1430,21 +1401,12 @@ int mmc_attach_sd(struct mmc_host *host)
 	 */
 #ifdef CONFIG_MMC_PARANOID_SD_INIT
 	retries = 5;
-	while (retries) {
+	/*
+	 * Some bad cards may take a long time to init, give preference to
+	 * suspend in those cases.
+	 */
+	while (retries && !host->rescan_disable) {
 		err = mmc_sd_init_card(host, host->ocr, NULL);
-
-		#ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE
-		* Skip below When ENOMEDIUM
-		* 2014-01-16, B2-BSP-FS@lge.com
-		*/
-		if (err == -ENOMEDIUM) {
-			printk(KERN_INFO "[LGE][MMC][%-18s( )] error:ENOMEDIUM\n", __func__);
-			retries=0;
-			break;
-		}
-		#endif
-
 		if (err) {
 			retries--;
 			mmc_power_off(host);
@@ -1461,6 +1423,9 @@ int mmc_attach_sd(struct mmc_host *host)
 		       mmc_hostname(host), err);
 		goto err;
 	}
+
+	if (host->rescan_disable)
+		goto err;
 #else
 	err = mmc_sd_init_card(host, host->ocr, NULL);
 	if (err)
@@ -1484,9 +1449,9 @@ remove_card:
 	mmc_claim_host(host);
 err:
 	mmc_detach_bus(host);
-
-	pr_err("%s: error %d whilst initialising SD card\n",
-		mmc_hostname(host), err);
+	if (err)
+		pr_err("%s: error %d whilst initialising SD card: rescan: %d\n",
+		       mmc_hostname(host), err, host->rescan_disable);
 
 	return err;
 }

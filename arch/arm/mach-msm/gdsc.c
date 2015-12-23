@@ -39,11 +39,7 @@
 #define EN_FEW_WAIT_VAL		(0x8 << 16)
 #define CLK_DIS_WAIT_VAL	(0x2 << 12)
 
-#ifdef CONFIG_MACH_LGE
-#define TIMEOUT_US		20000
-#else
 #define TIMEOUT_US		100
-#endif
 
 struct gdsc {
 	struct regulator_dev	*rdev;
@@ -150,7 +146,11 @@ static struct regulator_ops gdsc_ops = {
 
 static int __devinit gdsc_probe(struct platform_device *pdev)
 {
+#ifdef CONFIG_SHITTY_VARIANT
 	static atomic_t gdsc_count = ATOMIC_INIT(-1);
+#else
+	static atomic_t gdsc_count __initdata = ATOMIC_INIT(-1);
+#endif
 	struct regulator_init_data *init_data;
 	struct resource *res;
 	struct gdsc *sc;
@@ -278,7 +278,11 @@ static int __devexit gdsc_remove(struct platform_device *pdev)
 	return 0;
 }
 
+#ifdef CONFIG_SHITTY_VARIANT
 static struct of_device_id gdsc_match_table[] = {
+#else
+static struct of_device_id gdsc_match_table[] __initdata = {
+#endif
 	{ .compatible = "qcom,gdsc" },
 	{}
 };

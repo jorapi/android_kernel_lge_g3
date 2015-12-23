@@ -33,29 +33,18 @@ struct lp5521_led_config {
 };
 
 struct lp5521_led_pattern {
+#ifdef CONFIG_MACH_LGE
 	const u8 *r;
 	const u8 *g;
 	const u8 *b;
+#else
+	u8 *r;
+	u8 *g;
+	u8 *b;
+#endif
 	u8 size_r;
 	u8 size_g;
 	u8 size_b;
-};
-
-struct lp5521_engine {
-	int		id;
-	u8		mode;
-	u8		prog_page;
-	u8		engine_mask;
-};
-
-struct lp5521_led {
-	int			id;
-	u8			chan_nr;
-	u8			led_current;
-	u8			max_current;
-	struct led_classdev	cdev;
-	struct work_struct	brightness_work;
-	u8			brightness;
 };
 
 #define LP5521_CLOCK_AUTO	0
@@ -78,6 +67,9 @@ struct lp5521_platform_data {
 	struct lp5521_led_config *led_config;
 	u8	num_channels;
 	u8	clock_mode;
+#ifndef CONFIG_MACH_LGE
+	int	(*setup_resources)(void);
+#endif
 	void	(*release_resources)(void);
 	void	(*enable)(bool state);
 	const char *label;
@@ -86,31 +78,8 @@ struct lp5521_platform_data {
 	int num_patterns;
 };
 
-#define LP5521_MAX_LEDS			3	/* Maximum number of LEDs */
-#define LP5521_MAX_ENGINES		3	/* Maximum number of engines */
-
-struct lp5521_chip {
-	struct lp5521_platform_data *pdata;
-	struct mutex		lock; /* Serialize control */
-	struct i2c_client	*client;
-	struct lp5521_engine	engines[LP5521_MAX_ENGINES];
-	struct lp5521_led	leds[LP5521_MAX_LEDS];
-	u8			num_channels;
-	u8			num_leds;
-	int id_pattern_play;
-	u8 current_index;
-    unsigned int rgb_led_en;
-};
-
-#define LP5521_INFO_PRINT   	(1)
-
-
-#if defined(LP5521_INFO_PRINT)
-#define LP5521_INFO_MSG(fmt, args...) \
-		printk(KERN_INFO "[LP5521] " fmt, ##args);
-#else
+#ifdef CONFIG_MACH_LGE
 #define LP5521_INFO_MSG(fmt, args...)     {};
-#endif
 
 #ifdef CONFIG_LEDS_LP5521
 /*[pattern_id : 1, PowerOn_Animation]*/
@@ -149,11 +118,7 @@ static const u8 mode8_green[]={0x40, 0x00, 0x10, 0xFE, 0x40, 0x66, 0x4F, 0x00, 0
 static const u8 mode8_blue[]={0x40, 0x00, 0x10, 0xFE, 0x40, 0x73, 0x4F, 0x00, 0x08, 0xBC, 0xE0, 0x80, 0x0F, 0x9E, 0xE0, 0x80, 0x40, 0x73, 0x4F, 0x00, 0x05, 0xD5, 0xE0, 0x80, 0x10, 0x9C, 0xE0, 0x80, 0x1A, 0xFE};
 
 /*[pattern_id : 15, power off Charging100, brightness 50%]*/
-#if 1 /*pattern 1 and off time 5sec*/
 static const u8 mode4_green_50[]={0x40, 0x00, 0x3f, 0x19, 0x23, 0x33, 0x24, 0x32, 0x66, 0x00, 0x24, 0xb2, 0x23, 0xb3, 0x3f, 0x99, 0x7f, 0x00, 0xa2, 0x98};
-#else /*pattern 1 and off time 10sec*/
-static const u8 mode4_green_50[]={0x40, 0x00, 0x3f, 0x19, 0x23, 0x33, 0x24, 0x32, 0x66, 0x00, 0x24, 0xb2, 0x23, 0xb3, 0x3f, 0x99, 0x7f, 0x00, 0xa5, 0x18};
-#endif
 
 /*[pattern_id : 16, power off Charging0_99, brightness 50%]*/
 static const u8 mode3_red_50[]={0x40, 0x0d, 0x44, 0x0c, 0x23, 0x33, 0x24, 0x32, 0x66, 0x00, 0x24, 0xb2, 0x23, 0xb3, 0x44, 0x8c};
@@ -199,7 +164,7 @@ static const u8 mode16_green[]={0x40,0x00,0x7F,0x00,0xE0,0x02,0x40,0xFF,0x10,0x8
 static const u8 mode16_blue[]={};
 
 /*[pattern_id : 35, In call (Back LED)]*/
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM)  || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
+#ifdef CONFIG_MACH_LGE
 /* (255,65,65) */
 static const u8 mode17_red[] = {0xE0,0x0C,0x1B,0x0E,0x0B,0x23,0x09,0x2F,0x08,0x68,0x0C,0x22,0x1A,0x0F,0x4D,0x00,0x1A,0x8F,0x0C,0xA2,0x08,0xE8,0x09,0xAF,0x0B,0xA3,0x1B,0x8E,0xE3,0x00,0x5A,0x00};
 static const u8 mode17_green[] = {0xE0,0x80,0x40,0x00,0x44,0x02,0x29,0x09,0x22,0x0B,0x1E,0x1A,0x2E,0x08,0x43,0x03,0x4D,0x00,0x43,0x83,0x2E,0x88,0x1E,0x9A,0x22,0x8B,0x29,0x89,0x44,0x82,0xE0,0x02};
@@ -215,7 +180,7 @@ static const u8 mode18_red[]={0x40,0x00,0x7F,0x00,0x40,0xFF,0x46,0x00,0x03,0xD9,
 static const u8 mode18_green[]={};
 static const u8 mode18_blue[]={};
 
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
+#ifdef CONFIG_MACH_LGE
 static const u8 current_index_mapped_value[256] = {
 	7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,   // 14
 	7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  7,  8,  8,  8,  8,   // 29
@@ -261,5 +226,5 @@ static const u8 current_index_mapped_value[256] = {
 #endif
 
 #endif /* CONFIG_LEDS_LP5521 */
-
+#endif /* CONFIG_MACH_LGE */
 #endif /* __LINUX_LP5521_H */

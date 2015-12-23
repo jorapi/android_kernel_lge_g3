@@ -10,15 +10,14 @@
  * GNU General Public License for more details.
  *
  */
+
 #include "msm_sensor.h"
 #include <mach/board_lge.h>		//to use lge_get_board_revno()
 
 #define IMX208_SENSOR_NAME "imx208"
 DEFINE_MSM_MUTEX(imx208_mut);
 
-//                                      
 #define CONFIG_IMX208_DEBUG
-//                                      
 
 #undef CDBG
 #ifdef CONFIG_IMX208_DEBUG
@@ -28,7 +27,7 @@ DEFINE_MSM_MUTEX(imx208_mut);
 #endif
 
 static struct msm_sensor_ctrl_t imx208_s_ctrl;
-#if defined (CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined (CONFIG_MACH_MSM8974_G3_ATT)|| defined (CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
+#if defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_ATT)|| defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_CA)
 static struct msm_sensor_power_setting imx208_power_setting_rev_b[] = {
 	{  /* Set GPIO_RESET to low to disable power on reset*/
 		.seq_type = SENSOR_GPIO,
@@ -36,7 +35,7 @@ static struct msm_sensor_power_setting imx208_power_setting_rev_b[] = {
 		.config_val = GPIO_OUT_LOW,
 		.delay = 1,
 	},
-	{										//VDIG, PMIC_GPIO 10
+	{  //VDIG, PMIC_GPIO 10
 		.seq_type = SENSOR_VREG, //VREG_L18
 		.seq_val = CAM_VANA,
 		.config_val = 0,
@@ -73,69 +72,6 @@ static struct msm_sensor_power_setting imx208_power_setting_rev_b[] = {
 		.delay = 10,
 	},
 };
-#elif defined(CONFIG_MACH_MSM8974_TIGERS_KR) || defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
-static struct msm_sensor_power_setting imx208_power_setting_rev_b[] = {
-	{  /* Set GPIO_RESET to low to disable power on reset*/
-		.seq_type = SENSOR_GPIO,
-		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_LOW,
-		.delay = 1,
-	},
-#if defined(CONFIG_MACH_MSM8974_TIGERS_KR)
-	{
-		.seq_type = SENSOR_GPIO,
-		.seq_val = SENSOR_GPIO_VDIG,
-		.config_val = GPIO_OUT_HIGH,
-		.delay = 1,
-	},
-#else
-	{										//VDIG, PMIC_GPIO 10
-		.seq_type = SENSOR_GPIO,
-		.seq_val = SENSOR_GPIO_VANA,
-		.config_val = GPIO_OUT_HIGH,
-		.delay = 1,
-	},
-#endif
-	{
-		.seq_type = SENSOR_VREG,
-		.seq_val = CAM_VIO,
-		.config_val = 0,
-		.delay = 0,
-	},
-#if defined(CONFIG_MACH_MSM8974_TIGERS_KR)
-	{
-		.seq_type = SENSOR_VREG,
-		.seq_val = CAM_VANA,
-		.config_val = 0,
-		.delay = 1,
-	},
-#else
-	{
-		.seq_type = SENSOR_VREG,
-		.seq_val = CAM_VDIG,
-		.config_val = 0,
-		.delay = 1,
-	},
-#endif
-	{
-		.seq_type = SENSOR_GPIO,
-		.seq_val = SENSOR_GPIO_RESET,
-		.config_val = GPIO_OUT_HIGH,
-		.delay = 10,
-	},
-	{
-		.seq_type = SENSOR_CLK,
-		.seq_val = SENSOR_CAM_MCLK,
-		.config_val = 0,
-		.delay = 30,
-	},
-	{
-		.seq_type = SENSOR_I2C_MUX,
-		.seq_val = 0,
-		.config_val = 0,
-		.delay = 0,
-	},
-};
 #else
 static struct msm_sensor_power_setting imx208_power_setting_rev_b[] = {
 	{  /* Set GPIO_RESET to low to disable power on reset*/
@@ -144,7 +80,7 @@ static struct msm_sensor_power_setting imx208_power_setting_rev_b[] = {
 		.config_val = GPIO_OUT_LOW,
 		.delay = 1,
 	},
-	{										//VDIG, PMIC_GPIO 10
+	{  //VDIG, PMIC_GPIO 10
 		.seq_type = SENSOR_VREG, //VREG_L18
 		.seq_val = CAM_VANA,
 		.config_val = 0,
@@ -190,7 +126,7 @@ static struct msm_sensor_power_setting imx208_power_setting_rev_a[] = {
 		.config_val = GPIO_OUT_LOW,
 		.delay = 1,
 	},
-	{										//VDIG, PMIC_GPIO 10
+	{  //VDIG, PMIC_GPIO 10
 		.seq_type = SENSOR_VREG,
 		.seq_val = CAM_VANA,
 		.config_val = 0,
@@ -281,14 +217,10 @@ static int32_t imx208_platform_probe(struct platform_device *pdev)
 	const struct of_device_id *match;
 	CDBG("%s E\n", __func__);
 	match = of_match_device(imx208_dt_match, &pdev->dev);
-
-/*                                                    */
-	if(!match)
-	{
+	if (!match) {
 		pr_err(" %s failed ",__func__);
-	      return -ENODEV;
+		return -ENODEV;
 	}
-/*                                                    */
 
 	rc = msm_sensor_platform_probe(pdev, match->data);
 	CDBG("%s: X, rc = %d\n", __func__, rc);
@@ -299,7 +231,7 @@ static int __init imx208_init_module(void)
 {
 	int32_t rc = 0;
 	CDBG("%s E\n", __func__);
-#if defined(CONFIG_MACH_LGE)
+#ifdef CONFIG_MACH_LGE
 		switch(lge_get_board_revno()) {
 			case HW_REV_A:
 				CDBG("%s: Sensor power is set REV An", __func__);
@@ -313,12 +245,6 @@ static int __init imx208_init_module(void)
 				imx208_s_ctrl.power_setting_array.size = ARRAY_SIZE(imx208_power_setting_rev_b);
 				break;
 		}
-#endif
-
-#if defined(CONFIG_MACH_MSM8974_TIGERS_KR) || defined(CONFIG_MACH_MSM8974_B1_KR) || defined(CONFIG_MACH_MSM8974_B1W)
-		CDBG("%s: Sensor power is set for B1\n", __func__);
-		imx208_s_ctrl.power_setting_array.power_setting = imx208_power_setting_rev_b;
-		imx208_s_ctrl.power_setting_array.size = ARRAY_SIZE(imx208_power_setting_rev_b);
 #endif
 
 	rc = platform_driver_probe(&imx208_platform_driver,
@@ -342,8 +268,10 @@ static void __exit imx208_exit_module(void)
 
 static struct msm_sensor_ctrl_t imx208_s_ctrl = {
 	.sensor_i2c_client = &imx208_sensor_i2c_client,
-	//.power_setting_array.power_setting = imx208_power_setting,
-	//.power_setting_array.size = ARRAY_SIZE(imx208_power_setting),
+#ifndef CONFIG_MACH_LGE
+	.power_setting_array.power_setting = imx208_power_setting,
+	.power_setting_array.size = ARRAY_SIZE(imx208_power_setting),
+#endif
 	.msm_sensor_mutex = &imx208_mut,
 	.sensor_v4l2_subdev_info = imx208_subdev_info,
 	.sensor_v4l2_subdev_info_size = ARRAY_SIZE(imx208_subdev_info),

@@ -73,8 +73,8 @@ struct msm_ois_ctrl_t {
 
 int msm_init_ois(enum ois_ver_t ver);
 int msm_ois_off(void);
-int msm_ois_info(struct msm_sensor_ois_info_t* info); /*                                                        */
-int msm_ois_mode(enum ois_mode_t data);  /*                                                        */
+int msm_ois_info(struct msm_sensor_ois_info_t* info);
+int msm_ois_mode(enum ois_mode_t data);
 int msm_ois_move_lens (int16_t offset_x, int16_t offset_y);
 
 #endif

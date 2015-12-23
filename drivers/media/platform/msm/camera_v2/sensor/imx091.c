@@ -10,8 +10,11 @@
  * GNU General Public License for more details.
  *
  */
+
 #include "msm_sensor.h"
+
 #define IMX091_SENSOR_NAME "imx091"
+
 DEFINE_MSM_MUTEX(imx091_mut);
 
 static struct msm_sensor_ctrl_t imx091_s_ctrl;
@@ -119,13 +122,10 @@ static int32_t imx091_platform_probe(struct platform_device *pdev)
 	int32_t rc = 0;
 	const struct of_device_id *match;
 	match = of_match_device(imx091_dt_match, &pdev->dev);
-    /*                                                   */
-    if(!match)
-    {
-      pr_err(" %s failed ",__func__);
-      return -ENODEV;
-    }
-    /*                                                   */
+	if (!match) {
+		pr_err(" %s failed ",__func__);
+		return -ENODEV;
+	}
 	rc = msm_sensor_platform_probe(pdev, match->data);
 	return rc;
 }

@@ -15,13 +15,7 @@
 #include <mach/board.h>
 #include "mdss_hdmi_edid.h"
 
-// enable DEV_DBG log
-#ifdef DEV_DBG
-#undef DEV_DBG
-#define DEV_DBG(fmt, args...)   pr_err(fmt, ##args)
-#endif
-
-#if defined (CONFIG_SLIMPORT_ANX7816) || defined(CONFIG_SLIMPORT_ANX7808)
+#ifdef CONFIG_SLIMPORT_ANX7816
 extern int slimport_read_edid_block(int block, uint8_t *edid_buf);
 #endif
 #define DBC_START_OFFSET 4
@@ -419,16 +413,15 @@ static int hdmi_edid_read_block(struct hdmi_edid_ctrl *edid_ctrl, int block,
 {
 	const u8 *b = NULL;
 	u32 ndx, check_sum, print_len;
-#if defined (CONFIG_SLIMPORT_ANX7816) || defined(CONFIG_SLIMPORT_ANX7808)
+#ifdef CONFIG_SLIMPORT_ANX7816
 	int status;
 	int retry_cnt = 0;
-#else /* QCT original */
+#else
 	int block_size;
 	int i, status;
 	int retry_cnt = 0;
 	struct hdmi_tx_ddc_data ddc_data;
 #endif
-
 	b = edid_buf;
 
 	if (!edid_ctrl) {
@@ -437,15 +430,11 @@ static int hdmi_edid_read_block(struct hdmi_edid_ctrl *edid_ctrl, int block,
 	}
 
 read_retry:
-#if defined (CONFIG_SLIMPORT_ANX7816) || defined(CONFIG_SLIMPORT_ANX7808)
-	status = 0;
-#else /* QCT original */
+#ifdef CONFIG_SLIMPORT_ANX7816
+	status = slimport_read_edid_block(block, edid_buf);
+#else
 	block_size = 0x80;
 	status = 0;
-#endif
-#if defined (CONFIG_SLIMPORT_ANX7816) || defined(CONFIG_SLIMPORT_ANX7808)
-	status = slimport_read_edid_block(block, edid_buf);
-#else /* QCT original */
 	do {
 		DEV_DBG("EDID: reading block(%d) with block-size=%d\n",
 			block, block_size);
@@ -958,7 +947,6 @@ void limit_supported_video_format(u32 *video_format)
 	}
 }
 #endif
-
 static void hdmi_edid_add_sink_video_format(
 	struct hdmi_edid_sink_data *sink_data, u32 video_format)
 {
@@ -1199,6 +1187,7 @@ static void hdmi_edid_get_display_mode(struct hdmi_edid_ctrl *edid_ctrl,
 	svd = num_of_cea_blocks ?
 		hdmi_edid_find_block(data_buf+0x80, DBC_START_OFFSET,
 			VIDEO_DATA_BLOCK, &len) : NULL;
+
 #ifdef CONFIG_SLIMPORT_ANX7816
 	if (edid_ctrl->sink_mode) {
 #endif
@@ -1210,7 +1199,6 @@ static void hdmi_edid_get_display_mode(struct hdmi_edid_ctrl *edid_ctrl,
 #ifdef CONFIG_SLIMPORT_ANX7816
 	}
 #endif
-
 
 	sink_data = &edid_ctrl->sink_data;
 

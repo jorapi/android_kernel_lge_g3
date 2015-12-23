@@ -443,8 +443,14 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 				ps[i].seq_val = SENSOR_GPIO_STANDBY;
 			else if (!strcmp(seq_name, "sensor_gpio_vdig"))
 				ps[i].seq_val = SENSOR_GPIO_VDIG;
+#ifdef CONFIG_MACH_LGE
 			else if (!strcmp(seq_name, "sensor_gpio_vio"))
 				ps[i].seq_val = SENSOR_GPIO_VIO;
+			else if (!strcmp(seq_name, "sensor_gpio_vana"))
+				ps[i].seq_val = SENSOR_GPIO_VANA;
+			else if (!strcmp(seq_name, "sensor_gpio_vaf"))
+				ps[i].seq_val = SENSOR_GPIO_VAF;
+#endif
 			else
 				rc = -EILSEQ;
 			break;
@@ -825,6 +831,7 @@ int msm_camera_init_gpio_pin_tbl(struct device_node *of_node,
 			gconf->gpio_num_info->gpio_num[SENSOR_GPIO_FL_NOW]);
 	}
 
+#ifdef CONFIG_MACH_LGE
 	if (of_property_read_bool(of_node, "qcom,gpio-vana") == true) {
 		rc = of_property_read_u32(of_node, "qcom,gpio-vana", &val);
 		if (rc < 0) {
@@ -932,7 +939,7 @@ int msm_camera_init_gpio_pin_tbl(struct device_node *of_node,
 		CDBG("%s qcom,gpio-ldaf-en %d\n", __func__,
 			gconf->gpio_num_info->gpio_num[SENSOR_GPIO_LDAF_EN]);
 	}
-
+#endif
 
 	return rc;
 
@@ -1091,10 +1098,12 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 		CDBG("%s index %d\n", __func__, index);
 		power_setting = &ctrl->power_setting[index];
 		CDBG("%s type %d\n", __func__, power_setting->seq_type);
-		if(!power_setting) {
+#ifdef CONFIG_MACH_LGE
+		if (!power_setting) {
 			CDBG("power_setting is null\n");
 			continue;
 		}
+#endif
 		switch (power_setting->seq_type) {
 		case SENSOR_CLK:
 			if (power_setting->seq_val >= ctrl->clk_info_size) {
@@ -1301,8 +1310,7 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 					SENSOR_GPIO_MAX);
 				continue;
 			}
-
-#if defined(CONFIG_MACH_LGE)
+#ifdef CONFIG_MACH_LGE
 			if((pd->seq_val == SENSOR_GPIO_RESET ||
 				pd->seq_val == SENSOR_GPIO_OIS_RESET) &&
 				ctrl->gpio_conf->gpio_num_info->gpio_num[pd->config_val] !=
@@ -1312,7 +1320,6 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 				continue;
 			}
 #endif
-
 			if (!ctrl->gpio_conf->gpio_num_info->valid
 				[pd->seq_val])
 				continue;

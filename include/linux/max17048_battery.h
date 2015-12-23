@@ -20,8 +20,8 @@
 
 #ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 enum cell_type{
- LGC_LLL,
- TCD_AAC
+	LGC_LLL,
+	TCD_AAC
 };
 
 #define BATT_DS2704_L   32

@@ -54,7 +54,7 @@
 
 #define I2C_SUSPEND_WORKAROUND (1)
 
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 #define THERMALE_NOT_TRIGGER -1
 #define THERMALE_ALL_CLEAR 0
 #define THERMALE_SETTABLE_RANGE_MAX 3008
@@ -128,7 +128,6 @@ struct unified_wlc_chip {
 	struct delayed_work 	check_suspended_work;
 	int suspended;
 #endif /*I2C_SUSPEND_WORKAROUND */
-	int		enabled;
 #ifdef CONFIG_CHARGER_UNIFIED_WLC_ALIGNMENT
 	struct mutex align_lock;
 	unsigned int align_values;
@@ -151,7 +150,6 @@ static bool wireless_charging;
 static enum power_supply_property pm_power_props_wireless[] = {
 	POWER_SUPPLY_PROP_PRESENT,
 	POWER_SUPPLY_PROP_ONLINE,
-	POWER_SUPPLY_PROP_WIRELESS_CHARGER_SWITCH,
 #ifdef CONFIG_CHARGER_UNIFIED_WLC_ALIGNMENT
 	POWER_SUPPLY_PROP_ALIGNMENT,
 #endif
@@ -171,6 +169,9 @@ static int
 set_wlc_thermal_mitigation(const char *val, struct kernel_param *kp)
 {
 	int ret;
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
+	struct unified_wlc_chip *chip;
+#endif
 
 	ret = param_set_int(val, kp);
 	if (ret) {
@@ -183,24 +184,20 @@ set_wlc_thermal_mitigation(const char *val, struct kernel_param *kp)
 		return ret;
 	}
 
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	pr_info("%s : thermal-engine set wlc_thermal_mitigation to %d\n",
 		__func__, wlc_thermal_mitigation);
 
 	if(!(wlc_thermal_mitigation == THERMALE_ALL_CLEAR)
-		&& !(wlc_thermal_mitigation >= THERMALE_SETTABLE_RANGE_MIN
-		&& wlc_thermal_mitigation <= THERMALE_SETTABLE_RANGE_MAX)) {
+	   && !(wlc_thermal_mitigation >= THERMALE_SETTABLE_RANGE_MIN
+	   && wlc_thermal_mitigation <= THERMALE_SETTABLE_RANGE_MAX)) {
 		pr_err("invalid input!\n");
 		return ret;
 	}
 
-	{
-		struct unified_wlc_chip *chip = the_chip;
-		wlc_charger_psy_setprop_event(chip, psy_ext,
-			WIRELESS_THERMAL_MITIGATION, wlc_thermal_mitigation, _EXT_);
-	}
-#else
-	pr_err("thermal-engine wlc chg current control not enabled\n");
+        chip = the_chip;
+	wlc_charger_psy_setprop_event(chip, psy_ext,
+	    WIRELESS_THERMAL_MITIGATION, wlc_thermal_mitigation, _EXT_);
 #endif
 
 	return 0;
@@ -318,29 +315,14 @@ check_status:
 }
 #endif
 
-static int pm_power_set_property_wireless(struct power_supply *psy,
-		enum power_supply_property psp,
-		const union power_supply_propval *val)
-{
-	struct unified_wlc_chip *chip =
-			container_of(psy, struct unified_wlc_chip, wireless_psy);
-	switch(psp) {
-		case POWER_SUPPLY_PROP_WIRELESS_CHARGER_SWITCH:
-			chip->enabled = val->intval;
-			pr_info("%s : POWER_SUPPLY_PROP_WIRELESS_CHARGER_SWITCH : %d\n",
-				__func__, chip->enabled);
-			break;
-		default:
-			return -EINVAL;
-	}
-	return 0;
-}
 static int pm_power_get_property_wireless(struct power_supply *psy,
 					 enum power_supply_property psp,
 					 union power_supply_propval *val)
 {
+#ifdef CONFIG_CHARGER_UNIFIED_WLC_ALIGNMENT
 	struct unified_wlc_chip *chip =
 			container_of(psy, struct unified_wlc_chip, wireless_psy);
+#endif
 
 	/* Check if called before init */
 	/* todo workaround for below kmsg
@@ -352,11 +334,6 @@ static int pm_power_get_property_wireless(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_PRESENT:
 	case POWER_SUPPLY_PROP_ONLINE:
 		val->intval = wireless_charging;
-		break;
-	case POWER_SUPPLY_PROP_WIRELESS_CHARGER_SWITCH:
-		val->intval = chip->enabled;
-		pr_info("%s : POWER_SUPPLY_PROP_WIRELESS_CHARGER_SWITCH : %d\n",
-			__func__, val->intval);
 		break;
 #ifdef CONFIG_CHARGER_UNIFIED_WLC_ALIGNMENT
 	case POWER_SUPPLY_PROP_ALIGNMENT:
@@ -385,6 +362,7 @@ static int pm_power_set_event_property_wireless(struct power_supply *psy,
 {
 	struct unified_wlc_chip *chip =
 			container_of(psy, struct unified_wlc_chip, wireless_psy);
+
 	switch(psp) {
 	case POWER_SUPPLY_PROP_WIRELESS_CHARGE_COMPLETED:
 		pr_info("%s : ask POWER_SUPPLY_PROP_WIRELESS_CHARGE_COMPLETED", __func__);
@@ -424,15 +402,15 @@ static int pm_power_get_event_property_wireless(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_WIRELESS_ONLINE:
 		if (likely(chip)) {
 			val->intval = is_wireless_charger_plugged_internal(chip);
-			pr_debug("%s : POWER_SUPPLY_PROP_WIRELESS_ONLINE :%d\n",
+			pr_info("%s : POWER_SUPPLY_PROP_WIRELESS_ONLINE :%d\n",
 				__func__, val->intval);
 		}
 		break;
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 	case POWER_SUPPLY_PROP_WIRELESS_THERMAL_MITIGATION:
 		val->intval = wlc_thermal_mitigation;
-		pr_debug("%s : POWER_SUPPLY_PROP_WIRELESS_THERMAL_MITIGATION : %d\n",
-			__func__, val->intval);
+		pr_info("%s : POWER_SUPPLY_PROP_WIRELESS_THERMAL_MITIGATION : %d\n",
+		    __func__, val->intval);
 		break;
 #endif
 	default:
@@ -829,20 +807,6 @@ static void unified_parse_dt(struct device *dev,
 	pdata->wlc_full_chg = of_get_named_gpio(np, "wlc_full_chg", 0);
 
 }
-static int wlc_charger_property_is_writeable(struct power_supply *psy,
-	enum power_supply_property psp)
-{
-	switch (psp) {
-	case POWER_SUPPLY_PROP_WIRELESS_CHARGER_SWITCH:
-		return 1;
-
-	default:
-		break;
-	}
-
-	return -EINVAL;
-}
-
 
 static int __devinit unified_wlc_probe(struct platform_device *pdev)
 {
@@ -907,11 +871,8 @@ static int __devinit unified_wlc_probe(struct platform_device *pdev)
 	chip->wireless_psy.properties = pm_power_props_wireless;
 	chip->wireless_psy.num_properties = ARRAY_SIZE(pm_power_props_wireless);
 	chip->wireless_psy.get_property = pm_power_get_property_wireless;
-	chip->wireless_psy.set_property = pm_power_set_property_wireless;
 	chip->wireless_psy.get_event_property = pm_power_get_event_property_wireless;
 	chip->wireless_psy.set_event_property = pm_power_set_event_property_wireless;
-	chip->wireless_psy.property_is_writeable	=
-		wlc_charger_property_is_writeable;
 	rc = power_supply_register(chip->dev, &chip->wireless_psy);
 	if (rc < 0) {
 		pr_err("[WLC] %s : power_supply_register wireless failed rx = %d\n", __func__, rc);
@@ -967,7 +928,6 @@ static int __devinit unified_wlc_probe(struct platform_device *pdev)
 	}
 	/*else
 		wireless_removed(chip);*/
-	chip->enabled = 0;
 	pr_err("[WLC] %s : probe done\n", __func__);
 	return 0;
 /*

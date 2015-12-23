@@ -18,12 +18,6 @@
 
 #define SSC_EN
 
-#if 0
-#define SSC_1
-#define EYE_TEST
-#define EDID_DEBUG_PRINT
-#endif
-
 #define AUX_ERR  1
 #define AUX_OK   0
 
@@ -58,6 +52,7 @@ void slimport_set_hdmi_hpd(int on);
 
 #if defined (CONFIG_SLIMPORT_ANX7816) || defined(CONFIG_SLIMPORT_ANX7808)
 bool slimport_is_connected(void);
+bool slimport_is_check(void);
 #else
 static inline bool slimport_is_connected(void)
 {

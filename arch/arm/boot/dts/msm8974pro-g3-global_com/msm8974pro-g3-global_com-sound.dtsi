@@ -27,9 +27,5 @@
 		};
 	};
 
-	tpa_amp:ti_tpa2015d1 {
-		status = "ok";
-		revision = "evb1...evb2";
-	};
-	};
+};
 

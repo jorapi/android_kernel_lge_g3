@@ -261,12 +261,10 @@ static void of_spmi_walk_dev_container(struct of_spmi_dev_info *d_info,
 
 	if (!of_device_is_available(container))
 		return;
-
 #ifdef CONFIG_MACH_LGE
 	if (!of_device_is_available_revision(container))
 		return;
 #endif
-
 
 	/*
 	 * Count the total number of device_nodes so we know how much
@@ -349,7 +347,6 @@ static void of_spmi_walk_slave_container(struct of_spmi_dev_info *d_info,
 
 		if (!of_device_is_available(node))
 			continue;
-
 #ifdef CONFIG_MACH_LGE
 		if (!of_device_is_available_revision(node))
 			continue;
@@ -450,7 +447,6 @@ int of_spmi_register_devices(struct spmi_controller *ctrl)
 
 			if (!of_device_is_available(node))
 				continue;
-
 #ifdef CONFIG_MACH_LGE
 			if (!of_device_is_available_revision(node))
 				continue;
