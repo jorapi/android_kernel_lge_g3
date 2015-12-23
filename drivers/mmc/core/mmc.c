@@ -66,6 +66,21 @@ static const struct mmc_fixup mmc_fixups[] = {
 	MMC_FIXUP_EXT_CSD_REV(CID_NAME_ANY, CID_MANFID_HYNIX,
 			      0x014a, add_quirk, MMC_QUIRK_BROKEN_HPI, 5),
 
+	/* Disable HPI feature for Kingstone card */
+	MMC_FIXUP_EXT_CSD_REV("MMC16G", CID_MANFID_KINGSTON, CID_OEMID_ANY,
+			add_quirk, MMC_QUIRK_BROKEN_HPI, 5),
+
+	/*
+	 * Some Hynix cards exhibit data corruption over reboots if cache is
+	 * enabled. Disable cache for all versions until a class of cards that
+	 * show this behavior is identified.
+	 */
+	MMC_FIXUP("H8G2d", CID_MANFID_HYNIX, CID_OEMID_ANY, add_quirk_mmc,
+		  MMC_QUIRK_CACHE_DISABLE),
+
+	MMC_FIXUP("MMC16G", CID_MANFID_KINGSTON, CID_OEMID_ANY, add_quirk_mmc,
+		  MMC_QUIRK_CACHE_DISABLE),
+
 	END_FIXUP
 };
 
@@ -111,19 +126,7 @@ static int mmc_decode_cid(struct mmc_card *card)
 		card->cid.prod_name[5]	= UNSTUFF_BITS(resp, 56, 8);
 		card->cid.serial	= UNSTUFF_BITS(resp, 16, 32);
 		card->cid.month		= UNSTUFF_BITS(resp, 12, 4);
-#ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE
-		 * modify date cid register values
-		 * see CID register part in JEDEC Spec.
-		 * ex) 0000 : 1997, or 2013 if EXT_CSD_REV [192] > 4
-		 * don't care MDT y Field[11:8] value over 1101b.
-		 * 2014-03-07, B2-BSP-FS@lge.com
-		 */
-		if(card->ext_csd.rev > 4)
-			card->cid.year		= UNSTUFF_BITS(resp, 8, 4) + 2013;
-		else
-#endif
-		card->cid.year      = UNSTUFF_BITS(resp, 8, 4) + 1997;
+		card->cid.year		= UNSTUFF_BITS(resp, 8, 4) + 1997;
 		break;
 
 	default:
@@ -351,6 +354,8 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 
 	card->ext_csd.raw_card_type = ext_csd[EXT_CSD_CARD_TYPE];
 	mmc_select_card_type(card);
+
+	card->ext_csd.raw_drive_strength = ext_csd[EXT_CSD_DRIVE_STRENGTH];
 
 	card->ext_csd.raw_s_a_timeout = ext_csd[EXT_CSD_S_A_TIMEOUT];
 	card->ext_csd.raw_erase_timeout_mult =
@@ -615,12 +620,6 @@ static int mmc_compare_ext_csds(struct mmc_card *card, unsigned bus_width)
 	err = mmc_get_ext_csd(card, &bw_ext_csd);
 
 	if (err || bw_ext_csd == NULL) {
-		#ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE, 2013-04-19, G2-FS@lge.com
-		* Adding Print, Requested by QMC-CASE-01158823
-		*/
-		pr_err("%s: %s: 0x%x, 0x%x\n", mmc_hostname(card->host), __func__, err, bw_ext_csd ? *bw_ext_csd : 0x0);
-		#endif
 		if (bus_width != MMC_BUS_WIDTH_1)
 			err = -EINVAL;
 		goto out;
@@ -664,19 +663,8 @@ static int mmc_compare_ext_csds(struct mmc_card *card, unsigned bus_width)
 			bw_ext_csd[EXT_CSD_SEC_CNT + 2]) &&
 		(card->ext_csd.raw_sectors[3] ==
 			bw_ext_csd[EXT_CSD_SEC_CNT + 3]));
-
-	#ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE, 2013-04-19, G2-FS@lge.com
-		* Adding Print, Requested by QMC-CASE-01158823
-		*/
-		if (err) {
-		pr_err("%s: %s: fail during compare, err = 0x%x\n", mmc_hostname(card->host), __func__, err);
-		err = -EINVAL;
-		}
-	#else
 	if (err)
 		err = -EINVAL;
-	#endif
 
 out:
 	mmc_free_ext_csd(bw_ext_csd);
@@ -773,9 +761,7 @@ static int mmc_select_powerclass(struct mmc_card *card,
 				EXT_CSD_PWR_CL_52_195 :
 				EXT_CSD_PWR_CL_DDR_52_195;
 		else if (host->ios.clock <= 200000000)
-			index = (bus_width <= EXT_CSD_BUS_WIDTH_8) ?
-				EXT_CSD_PWR_CL_200_195 :
-				EXT_CSD_PWR_CL_DDR_200_195;
+			index = EXT_CSD_PWR_CL_200_195;
 		break;
 	case MMC_VDD_27_28:
 	case MMC_VDD_28_29:
@@ -793,20 +779,13 @@ static int mmc_select_powerclass(struct mmc_card *card,
 				EXT_CSD_PWR_CL_52_360 :
 				EXT_CSD_PWR_CL_DDR_52_360;
 		else if (host->ios.clock <= 200000000)
-			index = (bus_width <= EXT_CSD_BUS_WIDTH_8) ?
-				EXT_CSD_PWR_CL_200_360 :
-				EXT_CSD_PWR_CL_DDR_200_360;
+			index = (bus_width == EXT_CSD_DDR_BUS_WIDTH_8) ?
+				EXT_CSD_PWR_CL_DDR_200_360 :
+				EXT_CSD_PWR_CL_200_360;
 		break;
 	default:
-		#ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE, 2013-04-19, G2-FS@lge.com
-		* Adding Print, Requested by QMC-CASE-01158823
-		*/
-		pr_err("%s: %s: Voltage range not supported for power class, host->ios.vdd = 0x%x\n", mmc_hostname(host), __func__, host->ios.vdd);
-		#else
 		pr_warning("%s: Voltage range not supported "
 			   "for power class.\n", mmc_hostname(host));
-		#endif
 		return -EINVAL;
 	}
 
@@ -1180,22 +1159,8 @@ static int mmc_select_hs400(struct mmc_card *card, u8 *ext_csd)
 	}
 
 	/* Switch to HS400 mode if bus width set successfully */
-	#ifdef CONFIG_MACH_LGE
-	/* LGE_CHANGE
-	 * As recommendation of Toshiba, we use 0x4 for Driver Strength in case of Toshiba eMMC.
-	 * 2014.03.17, B2-BSP-FS@lge.com
-	*/
-	if (card->cid.manfid == 17){
-		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				EXT_CSD_HS_TIMING, 67, 0);
-	} else {
-		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				EXT_CSD_HS_TIMING, 3, 0);
-	}
-	#else
 	err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
 				 EXT_CSD_HS_TIMING, 3, 0);
-	#endif
 	if (err && err != -EBADMSG) {
 		pr_err("%s: Setting HS_TIMING to HS400 failed (err:%d)\n",
 			mmc_hostname(host), err);
@@ -1326,10 +1291,7 @@ static int mmc_reboot_notify(struct notifier_block *notify_block,
 	struct mmc_card *card = container_of(
 			notify_block, struct mmc_card, reboot_notify);
 
-	if (event != SYS_RESTART)
-		card->issue_long_pon = true;
-	else
-		card->issue_long_pon = false;
+	card->pon_type = (event != SYS_RESTART) ? MMC_LONG_PON : MMC_SHRT_PON;
 
 	return NOTIFY_OK;
 }
@@ -1466,15 +1428,9 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		err = mmc_decode_csd(card);
 		if (err)
 			goto free_card;
-#ifndef CONFIG_MACH_LGE
-		/* LGE_CHANGE
-		 *  ext_csd.rev value are required while decoding cid.year, so move down.
-		 *  2014-03-07, B2-BSP-FS@lge.com
-		 */
 		err = mmc_decode_cid(card);
 		if (err)
 			goto free_card;
-#endif
 	}
 
 	/*
@@ -1498,15 +1454,6 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		err = mmc_read_ext_csd(card, ext_csd);
 		if (err)
 			goto free_card;
-#ifdef CONFIG_MACH_LGE
-		/* LGE_CHANGE
-		 * decode cid here.
-		 * 2014-03-07, B2-BSP-FS@lge.com
-		 */
-		err = mmc_decode_cid(card);
-		if (err)
-			goto free_card;
-#endif
 
 		/* If doing byte addressing, check if required to do sector
 		 * addressing.  Handle the case of <2GB cards needing sector
@@ -1642,11 +1589,6 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 			card->ext_csd.cache_ctrl = 1;
 		}
 	}
-	if (card->quirks & MMC_QUIRK_CACHE_DISABLE) {
-		pr_warn("%s: This is Hynix card, cache disabled!\n",
-				mmc_hostname(card->host));
-		card->ext_csd.cache_ctrl = 0;
-	}
 
 	if ((host->caps2 & MMC_CAP2_PACKED_WR &&
 			card->ext_csd.max_packed_writes > 0) ||
@@ -1745,19 +1687,24 @@ static int mmc_poweroff_notify(struct mmc_card *card, unsigned int notify_type)
 	return err;
 }
 
-int mmc_send_long_pon(struct mmc_card *card)
+int mmc_send_pon(struct mmc_card *card)
 {
 	int err = 0;
 	struct mmc_host *host = card->host;
 
+	if (!mmc_can_poweroff_notify(card))
+		goto out;
+
 	mmc_claim_host(host);
-	if (card->issue_long_pon && mmc_can_poweroff_notify(card)) {
+	if (card->pon_type & MMC_LONG_PON)
 		err = mmc_poweroff_notify(host->card, EXT_CSD_POWER_OFF_LONG);
-		if (err)
-			pr_warning("%s: error %d sending Long PON",
-					mmc_hostname(host), err);
-	}
+	else if (card->pon_type & MMC_SHRT_PON)
+		err = mmc_poweroff_notify(host->card, EXT_CSD_POWER_OFF_SHORT);
+	if (err)
+		pr_warn("%s: error %d sending PON type %u",
+			mmc_hostname(host), err, card->pon_type);
 	mmc_release_host(host);
+out:
 	return err;
 }
 
@@ -1770,11 +1717,12 @@ static void mmc_remove(struct mmc_host *host)
 	BUG_ON(!host->card);
 
 	unregister_reboot_notifier(&host->card->reboot_notify);
+
+	mmc_exit_clk_scaling(host);
 	mmc_remove_card(host->card);
 
 	mmc_claim_host(host);
 	host->card = NULL;
-	mmc_exit_clk_scaling(host);
 	mmc_release_host(host);
 }
 
@@ -1845,15 +1793,10 @@ static int mmc_suspend(struct mmc_host *host)
 	if (err)
 		goto out;
 
-	#if defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) //B2 Global does not support sleep(CMD5) command
-	if (!mmc_host_is_spi(host))
-        mmc_deselect_cards(host);
-	#else
-        if (mmc_card_can_sleep(host))
-            err = mmc_card_sleep(host);
-        else if (!mmc_host_is_spi(host))
-            mmc_deselect_cards(host);
-	#endif
+	if (mmc_card_can_sleep(host))
+		err = mmc_card_sleep(host);
+	else if (!mmc_host_is_spi(host))
+		mmc_deselect_cards(host);
 	host->card->state &= ~(MMC_STATE_HIGHSPEED | MMC_STATE_HIGHSPEED_200);
 
 out:

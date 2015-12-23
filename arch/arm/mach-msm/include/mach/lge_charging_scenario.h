@@ -20,11 +20,6 @@
 
 #include <linux/kernel.h>
 
-#define CONFIG_LGE_THERMALE_CHG_CONTROL
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-#define CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-#endif
-
 #define DC_IUSB_VOLTUV   4000000
 #if defined(CONFIG_BQ24192_CHARGER)
 #define DC_IUSB_CURRENT  500
@@ -37,8 +32,8 @@
 enum lge_battemp_states {
 	CHG_BATTEMP_BL_M11,
 	CHG_BATTEMP_M10_M5,
-	CHG_BATTEMP_M4_41,
-	CHG_BATTEMP_42_45,
+	CHG_BATTEMP_M4_42,
+	CHG_BATTEMP_43_45,
 	CHG_BATTEMP_46_51,
 	CHG_BATTEMP_52_OT,
 	CHG_BATTEMP_AB_OT,
@@ -76,14 +71,6 @@ struct charging_info {
 	int     batt_temp;
 	int     is_charger;
 	int     current_now;
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL
-#ifdef CONFIG_LGE_THERMALE_CHG_CONTROL_FOR_WLC
-	int		input_current_ma;
-	int		input_current_te;
-#endif
-	int     chg_current_ma;
-	int     chg_current_te;
-#endif
 };
 
 struct charging_rsp {

@@ -26,9 +26,4 @@
 			revision = "rev_a...";
 		};
 	};
-
-	tpa_ampi:ti_tpa2015d1 {
-		status = "ok";
-		revision = "evb1...evb2";
-	};
 };

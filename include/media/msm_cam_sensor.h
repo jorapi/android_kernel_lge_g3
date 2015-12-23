@@ -12,6 +12,8 @@
 #define I2C_SEQ_REG_DATA_MAX      20
 #define MAX_CID                   16
 
+#define I2C_USER_REG_DATA_MAX 1024
+
 #define MSM_SENSOR_MCLK_8HZ   8000000
 #define MSM_SENSOR_MCLK_16HZ  16000000
 #define MSM_SENSOR_MCLK_24HZ  24000000
@@ -52,6 +54,7 @@
 
 #define MAX_AF_ITERATIONS 3
 #define MAX_NUMBER_OF_STEPS 47
+#define MAX_POWER_CONFIG 12
 
 typedef enum sensor_stats_type {
 	YRGB,
@@ -105,12 +108,12 @@ enum msm_sensor_power_seq_gpio_t {
 	SENSOR_GPIO_VAF,
 	SENSOR_GPIO_FL_EN,
 	SENSOR_GPIO_FL_NOW,
-/*                                                        */
+#ifdef CONFIG_MACH_LGE
 	SENSOR_GPIO_OIS_LDO_EN,
 	SENSOR_GPIO_OIS_RESET,
 	SENSOR_GPIO_AF_MVDD,
 	SENSOR_GPIO_LDAF_EN,
-/*                                                        */
+#endif
 	SENSOR_GPIO_MAX,
 };
 
@@ -131,7 +134,6 @@ enum msm_sensor_resolution_t {
 	MSM_SENSOR_RES_5,
 	MSM_SENSOR_RES_6,
 	MSM_SENSOR_RES_7,
-	MSM_SENSOR_RES_8,	 //                                                                       
 	MSM_SENSOR_INVALID_RES,
 };
 
@@ -360,10 +362,12 @@ struct msm_sensor_info_t {
 	uint32_t sensor_mount_angle;
 	int modes_supported;
 	enum camb_position_t position;
-	int					ois_supported; /*                                                       */
+#ifdef CONFIG_LG_OIS
+	int ois_supported;
+#endif
 };
 
-/*                                                          */
+#ifdef CONFIG_LG_OIS
 struct msm_sensor_ois_info_t{
 	char ois_provider[MAX_SENSOR_NAME];
 	int16_t gyro[2];
@@ -385,9 +389,9 @@ enum ois_ver_t {
 	OIS_VER_CALIBRATION,
 	OIS_VER_DEBUG
 };
-/*                                                          */
+#endif
 
-/*                                                            */
+#ifdef CONFIG_LG_PROXY
 struct msm_sensor_proxy_info_t{
 	uint16_t proxy_val;
 	uint32_t proxy_conv;
@@ -397,7 +401,7 @@ struct msm_sensor_proxy_info_t{
 	uint32_t cal_count;
 	uint32_t cal_done;
 };
-/*                                                            */
+#endif
 
 struct camera_vreg_t {
 	const char *reg_name;
@@ -421,7 +425,9 @@ struct msm_sensor_init_params {
 	enum camb_position_t position;
 	/* sensor mount angle */
 	uint32_t            sensor_mount_angle;
-	int					ois_supported; /*                                                       */
+#ifdef CONFIG_LG_OIS
+	int ois_supported;
+#endif
 };
 
 struct msm_camera_sensor_slave_info {
@@ -442,9 +448,11 @@ struct sensorb_cfg_data {
 	union {
 		struct msm_sensor_info_t      sensor_info;
 		struct msm_sensor_init_params sensor_init_params;
-		struct msm_sensor_ois_info_t	ois_info;	/*                                                        */
-		struct msm_sensor_proxy_info_t	proxy_info;	/*                                                          */
-		uint16_t proxy_data;	/*                                                               */
+#ifdef CONFIG_LG_OIS
+		struct msm_sensor_ois_info_t	ois_info;
+		struct msm_sensor_proxy_info_t	proxy_info;
+		uint16_t proxy_data;
+#endif
 		void                         *setting;
 	} cfg;
 };
@@ -531,19 +539,23 @@ enum msm_sensor_cfg_type_t {
 	CFG_SET_WHITE_BALANCE,
 	CFG_SET_AUTOFOCUS,
 	CFG_CANCEL_AUTOFOCUS,
-	CFG_OIS_ON,					/*                                                  */
-	CFG_OIS_OFF,				/*                                                  */
-	CFG_GET_OIS_INFO,			/*                                                        */
-	CFG_SET_OIS_MODE,   		/*                                                        */
-	CFG_OIS_MOVE_LENS,			/*                                                        */
-	CFG_PROXY_ON,				/*                                                               */
-	CFG_PROXY_OFF,				/*                                                               */
-	CFG_GET_PROXY,				/*                                                               */
-	CFG_PROXY_THREAD_ON,				/*                                                               */
-	CFG_PROXY_THREAD_PAUSE,			/*                                                               */
-	CFG_PROXY_THREAD_RESTART,			/*                                                               */
-	CFG_PROXY_THREAD_OFF,				/*                                                               */
+#ifdef CONFIG_LG_OIS
+	CFG_OIS_ON,
+	CFG_OIS_OFF,
+	CFG_GET_OIS_INFO,
+	CFG_SET_OIS_MODE,
+	CFG_OIS_MOVE_LENS,
+#endif
+#ifdef CONFIG_LG_PROXY
+	CFG_PROXY_ON,
+	CFG_PROXY_OFF,
+	CFG_GET_PROXY,
+	CFG_PROXY_THREAD_ON,
+	CFG_PROXY_THREAD_PAUSE,
+	CFG_PROXY_THREAD_RESTART,
+	CFG_PROXY_THREAD_OFF,
 	CFG_PROXY_CAL,
+#endif
 };
 
 enum msm_actuator_cfg_type_t {
@@ -698,18 +710,11 @@ enum msm_camera_led_config_t {
 	MSM_CAMERA_LED_HIGH,
 	MSM_CAMERA_LED_INIT,
 	MSM_CAMERA_LED_RELEASE,
-/*                                                              */
+#ifdef CONFIG_LGE_DUAL_LED
 	MSM_CAMERA_LED_HIGH_20P,
 	MSM_CAMERA_LED_HIGH_40P,
 	MSM_CAMERA_LED_HIGH_60P,
 	MSM_CAMERA_LED_HIGH_80P,
-/*                                                              */
-
-#if 1
-/*           
-                                    
-                                
- */
 	MSM_CAMERA_LED_TORCH,	//For torch, Video recording
 #endif
 };

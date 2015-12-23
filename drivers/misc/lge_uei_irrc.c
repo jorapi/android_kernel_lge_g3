@@ -20,9 +20,6 @@ UEI_IRRC_DRIVER_FOR_MSM9860
 #include <mach/msm_iomap.h>
 #include <linux/regulator/consumer.h>
 #include "lge_uei_irrc.h"
-#if defined(CONFIG_MACH_MSM8974_VU3_KR)
-#include <mach/board_lge.h>
-#endif
 
 struct uei_irrc_pdata_type irrc_data;
 
@@ -37,38 +34,6 @@ static int irrc_parse_dt(struct device *dev, struct uei_irrc_pdata_type *pdata)
 }
 #endif
 
-#if defined(CONFIG_MACH_MSM8974_VU3_KR)
-static int uei_vdd_enable(struct device *dev, struct uei_irrc_pdata_type *pdata)
-{
-	int rc = -EINVAL;
-	printk(KERN_INFO "%s\n", __func__);
-
-	if (lge_get_board_revno() < HW_REV_B)
-	{
-		pdata->irrc_vdd_main = regulator_get(dev, "8941_l10");			/* +1V8_VREG_L10 */
-		if (IS_ERR(pdata->irrc_vdd_main))
-		{
-			pr_err("%s: regulator get of 8921_l10 failed (%ld)\n", __func__, PTR_ERR(pdata->irrc_vdd_main));
-			rc = PTR_ERR(pdata->irrc_vdd_main);
-		}
-
-		rc = regulator_set_voltage(pdata->irrc_vdd_main, 1800000, 1800000);
-		if(rc)
-			pr_err("%s: regulator set of irrc_vdd_main failed, rc=%d\n", __func__, rc);
-
-		rc = regulator_enable(pdata->irrc_vdd_main);
-		if(rc)
-			pr_err("%s: regulator enable of irrc_vdd_main failed, rc=%d\n", __func__, rc);
-	}
-
-	/*
-	// uei,led-vdd = +1V8_VREG_S3A ( Reference )
-	*/
-
-	return rc;
-}
-#endif
-
 static int uei_irrc_probe(struct platform_device *pdev)
 {
 	int rc = 0;
@@ -78,10 +43,6 @@ static int uei_irrc_probe(struct platform_device *pdev)
 		printk(KERN_INFO "[IRRC] probe: pdev->dev.of-node\n");
 		irrc_parse_dt(&pdev->dev, &irrc_data);
 	}
-
-#if defined(CONFIG_MACH_MSM8974_VU3_KR)
-	uei_vdd_enable( &pdev->dev, &irrc_data );
-#endif
 
 	rc = gpio_request(irrc_data.reset_gpio, "irrc_reset_n");
 	if (rc) {

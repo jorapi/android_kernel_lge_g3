@@ -18,7 +18,6 @@
 #include <linux/stat.h>
 
 #include "power_supply.h"
-
 #ifdef CONFIG_LGE_PM
 #include <mach/board_lge.h>
 #endif
@@ -35,8 +34,6 @@
  * (as a macro let's say).
  */
 
-/* BEGIN : janghyun.baek@lge.com 2012-12-26 Temporarily change mode to 777
- * debug power sysfs node */
 #ifdef CONFIG_LGE_PM
 #define PSEUDO_BATT_ATTR(_name)						\
 {									\
@@ -57,7 +54,7 @@
 	.store = power_supply_store_property,				\
 }
 
-#ifdef CONFIG_LGE_PM_VZW_LLK
+#ifdef CONFIG_LGE_PM_LLK_MODE
 #define STORE_DEMO_ENABLED_ATTR(_name)					\
 {									\
 	.attr = { .name = #_name, .mode = 0644},			\
@@ -73,8 +70,6 @@
 	.store = power_supply_store_property,				\
 }
 #endif
-/* QCT origin */
-/* END : janghyun.baek@lge.com 2012-12-26 */
 
 static struct device_attribute power_supply_attrs[];
 
@@ -84,7 +79,7 @@ static ssize_t power_supply_show_property(struct device *dev,
 	static char *type_text[] = {
 		"Unknown", "Battery", "UPS", "Mains", "USB",
 		"USB_DCP", "USB_CDP", "USB_ACA",
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 		"Wireless"
 #endif
 	};
@@ -249,6 +244,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(input_current_max),
 	POWER_SUPPLY_ATTR(input_current_trim),
 	POWER_SUPPLY_ATTR(input_current_settled),
+	POWER_SUPPLY_ATTR(bypass_vchg_loop_debouncer),
 	POWER_SUPPLY_ATTR(current_now),
 	POWER_SUPPLY_ATTR(current_avg),
 	POWER_SUPPLY_ATTR(power_now),
@@ -281,7 +277,7 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(scope),
 	POWER_SUPPLY_ATTR(system_temp_level),
 	POWER_SUPPLY_ATTR(resistance),
-#if defined(CONFIG_LGE_PM_BATTERY_ID_CHECKER)
+#ifdef CONFIG_LGE_PM_BATTERY_ID_CHECKER
 	POWER_SUPPLY_ATTR(valid_batt_id),
 #endif
 #ifdef CONFIG_LGE_PM
@@ -289,27 +285,23 @@ static struct device_attribute power_supply_attrs[] = {
 	POWER_SUPPLY_ATTR(ext_pwr),
 	POWER_SUPPLY_ATTR(removed),
 #endif
-#if defined(CONFIG_VZW_POWER_REQ)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	POWER_SUPPLY_ATTR(vzw_chg),
 #endif
-#if defined(CONFIG_CHARGER_MAX77819) || defined(CONFIG_CHARGER_MAX8971) || defined(CONFIG_BQ24296_CHARGER)
-	POWER_SUPPLY_ATTR(charger_timer),
+#if defined(CONFIG_CHARGER_MAX77819) || defined(CONFIG_CHARGER_MAX8971) || \
+    defined(CONFIG_BQ24296_CHARGER)
+	POWER_SUPPLY_ATTR(safety_timer),
 	POWER_SUPPLY_ATTR(charging_complete),
 #endif
-#if defined(CONFIG_CHARGER_UNIFIED_WLC)
-	POWER_SUPPLY_ATTR(wireless_charger_switch),
+#ifdef CONFIG_LGE_PM_USB_CURRENT_MAX_MODE
+        POWER_SUPPLY_ATTR(usb_current_max_mode),
+#endif
+#ifdef CONFIG_CHARGER_UNIFIED_WLC
 #ifdef CONFIG_CHARGER_UNIFIED_WLC_ALIGNMENT
 	POWER_SUPPLY_ATTR(alignment),
-#if defined(CONFIG_CHARGER_UNIFIED_WLC_ALIGNMENT_IDT9025A) && defined(CONFIG_CHARGER_FACTORY_MODE)
-	/* only for debugging */
-	POWER_SUPPLY_ATTR(frequency),
-#elif defined(CONFIG_CHARGER_UNIFIED_WLC_ALIGNMENT_BQ5102X)  && defined(CONFIG_CHARGER_FACTORY_MODE)
-	/* only for debugging */
-	POWER_SUPPLY_ATTR(vrect),
 #endif
 #endif
-#endif
-#if defined(CONFIG_LGE_PM_VZW_LLK)
+#if defined(CONFIG_LGE_PM_LLK_MODE)
 	STORE_DEMO_ENABLED_ATTR(store_demo_enabled),
 #endif
 	/* Properties of type `const char *' */

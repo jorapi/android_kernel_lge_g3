@@ -48,7 +48,7 @@ config QCOM_VOWIFI_11R
 #okkwon change point
 config QCOM_TDLS
 	bool "Enable TDLS feature"
-	default y
+	default n
 
 config ENABLE_LINUX_REG
 	bool "Enable linux regulatory feature"

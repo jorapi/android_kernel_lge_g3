@@ -267,7 +267,7 @@ int lgit_ois_calibration(int ver)
 
 	//Cal. Dato to eeprom
 	ois_i2c_e2p_write(0x0908, (uint16_t)(0xFFFF & gyro_offset_value_x), 2);
-	ois_i2c_e2p_write(0x090A, (uint16_t)(0xFFFF & gyro_offset_value_y), 2); //gyro_offset_value_x -> gyro_offset_value_y로 수정함.(김형관)
+	ois_i2c_e2p_write(0x090A, (uint16_t)(0xFFFF & gyro_offset_value_y), 2);
 
 	//Cal. Data to OIS Driver
 	RegWriteA(0x609C, 0x00);
@@ -339,7 +339,7 @@ int32_t	lgit2_ois_on ( enum ois_ver_t ver  )
 	return rc;
 }
 
-int32_t	lgit2_ois_off(void)
+int32_t lgit2_ois_off(void)
 {
 	printk("%s enter\n", __func__);
 
@@ -362,7 +362,7 @@ int lgit2_ois_stat(struct msm_sensor_ois_info_t *ois_stat)
 	short int val_gyro_x;
 	short int val_gyro_y;
 	//Hall Fail Spec.
-	short int spec_hall_x_lower = 1467;//+-0.65deg확보하기 위하여 45.0um 필요함.(실제 Spec.은 +-0.5deg이므로 충분한 마진 포함됨)
+	short int spec_hall_x_lower = 1467;
 	short int spec_hall_x_upper = 2629;
 	short int spec_hall_y_lower = 1467;
 	short int spec_hall_y_upper = 2629;
@@ -400,13 +400,6 @@ int lgit2_ois_stat(struct msm_sensor_ois_info_t *ois_stat)
 	ois_stat->hall[1] = val_hall_y;
 
 	ois_stat->is_stable = 1;
-
-#if 0
-	CDBG("%s val_hall_x(%d) -> 0x%x g_gyro_offset_value_x (%d)\n", __func__,
-		val_hall_x, ois_stat->gyro[0], g_gyro_offset_value_x );
-	CDBG("%s val_hall_y(%d) -> 0x%x g_gyro_offset_value_y (%d)\n", __func__,
-		val_hall_y, ois_stat->gyro[1], g_gyro_offset_value_y);
-#endif
 
 	if (abs(val_gyro_x) > (25 * 262) ||
 		abs(val_gyro_y) > (25 * 262)) {
@@ -476,14 +469,12 @@ int32_t lgit2_ois_move_lens(int16_t target_x, int16_t target_y)
 void lgit2_ois_init(struct msm_ois_ctrl_t *msm_ois_t)
 {
 	lgit2_ois_func_tbl.ois_on = lgit2_ois_on;
-    lgit2_ois_func_tbl.ois_off = lgit2_ois_off;
-    lgit2_ois_func_tbl.ois_mode = lgit2_ois_mode;
-    lgit2_ois_func_tbl.ois_stat = lgit2_ois_stat;
+	lgit2_ois_func_tbl.ois_off = lgit2_ois_off;
+	lgit2_ois_func_tbl.ois_mode = lgit2_ois_mode;
+	lgit2_ois_func_tbl.ois_stat = lgit2_ois_stat;
 	lgit2_ois_func_tbl.ois_move_lens = lgit2_ois_move_lens;
  	lgit2_ois_func_tbl.ois_cur_mode = OIS_MODE_CENTERING_ONLY;
 
 	msm_ois_t->sid_ois = 0x7C >> 1;
 	msm_ois_t->ois_func_tbl = &lgit2_ois_func_tbl;
 }
-
-

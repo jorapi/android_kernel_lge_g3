@@ -45,11 +45,7 @@ static int32_t msm_led_trigger_get_subdev_id(struct msm_led_flash_ctrl_t *fctrl,
 	return 0;
 }
 
-#if !defined(CONFIG_LGE_DUAL_LED)
-/*           
-                 
-                               
- */
+#ifndef CONFIG_LGE_DUAL_LED
 static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 	void *data)
 {
@@ -57,15 +53,7 @@ static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 	struct msm_camera_led_cfg_t *cfg = (struct msm_camera_led_cfg_t *)data;
 	uint32_t i;
 	uint32_t curr_l, max_curr_l;
-
-#if defined(CONFIG_MACH_LGE)
-/*           
-                
-                               
- */
-	pr_info("called led_state %d, values %d, %d\n",
-		cfg->cfgtype, cfg->flash_current[0], cfg->flash_current[1]);
-#endif
+	CDBG("called led_state %d\n", cfg->cfgtype);
 
 	if (!fctrl) {
 		pr_err("failed\n");
@@ -85,7 +73,7 @@ static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 		if (fctrl->torch_trigger) {
 			max_curr_l = fctrl->torch_max_current;
 			if (cfg->torch_current > 0 &&
-					cfg->torch_current <= max_curr_l) {
+					cfg->torch_current < max_curr_l) {
 				curr_l = cfg->torch_current;
 			} else {
 				curr_l = fctrl->torch_op_current;
@@ -124,28 +112,6 @@ static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 		if (fctrl->torch_trigger)
 			led_trigger_event(fctrl->torch_trigger, 0);
 		break;
-
-#if defined(CONFIG_MACH_LGE)
-/*           
-                 
-                               
- */
-	case MSM_CAMERA_LED_TORCH:
-		if (fctrl->torch_trigger) {
-			max_curr_l = fctrl->torch_max_current;
-			if (cfg->torch_current > 0 &&
-					cfg->torch_current < max_curr_l) {
-				curr_l = cfg->torch_current;
-			} else {
-				curr_l = fctrl->torch_op_current;
-				pr_err("LED current clamped to %d\n",
-					curr_l);
-			}
-			led_trigger_event(fctrl->torch_trigger,
-				curr_l);
-		}
-	break;
-#endif
 
 	default:
 		rc = -EFAULT;
@@ -211,13 +177,8 @@ static int32_t msm_led_trigger_config(struct msm_led_flash_ctrl_t *fctrl,
 						i, torch_curr[i]);
 				}
 			}
-#if !defined(CONFIG_MACH_MSM8974_DZNY_DCM)
 			led_trigger_event2(fctrl->torch_trigger,
 				torch_curr[1], torch_curr[0]);
-#else
-			led_trigger_event2(fctrl->torch_trigger,
-				1, 1);
-#endif
 		}
 		break;
 

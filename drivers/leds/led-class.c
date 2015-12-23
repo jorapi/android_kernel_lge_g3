@@ -18,14 +18,11 @@
 #include <linux/timer.h>
 #include <linux/err.h>
 #include <linux/ctype.h>
-#include <linux/power_supply.h>
 #include <linux/leds.h>
 #include "leds.h"
-#if defined(CONFIG_MACH_LGE)
+#ifdef CONFIG_MACH_LGE
+#include <linux/power_supply.h>
 #include <mach/board_lge.h>
-#endif
-#if defined(CONFIG_LEDS_WINDOW_COLOR)
-#include <linux/string.h>
 #endif
 
 #define LED_BUFF_SIZE 50
@@ -45,10 +42,6 @@ extern void make_input_led_pattern(int patterns[],
 extern void set_kpdbl_pattern (int pattern);
 static int onoff_rgb;
 #endif
-#if defined(CONFIG_LEDS_WINDOW_COLOR)
-enum WINDOW_COLORS window_color;
-unsigned char win_color[] = "com.lge.systemui.theme.xxxxxx";
-#endif
 
 static void led_update_brightness(struct led_classdev *led_cdev)
 {
@@ -56,7 +49,7 @@ static void led_update_brightness(struct led_classdev *led_cdev)
 		led_cdev->brightness = led_cdev->brightness_get(led_cdev);
 }
 
-static ssize_t led_brightness_show(struct device *dev,
+static ssize_t led_brightness_show(struct device *dev, 
 		struct device_attribute *attr, char *buf)
 {
 	struct led_classdev *led_cdev = dev_get_drvdata(dev);
@@ -83,7 +76,7 @@ static ssize_t led_brightness_store(struct device *dev,
 		ret = count;
 
 		if (state == LED_OFF)
-			led_trigger_set_default(led_cdev);
+			led_trigger_remove(led_cdev);
 		led_set_brightness(led_cdev, state);
 	}
 
@@ -117,7 +110,7 @@ static ssize_t led_max_brightness_show(struct device *dev,
 	return snprintf(buf, LED_BUFF_SIZE, "%u\n", led_cdev->max_brightness);
 }
 
-#if defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_LRA)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 static int lge_thm_status;
 static ssize_t thermald_status_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
@@ -149,7 +142,7 @@ static struct device_attribute led_class_attrs[] = {
 	__ATTR(brightness, 0644, led_brightness_show, led_brightness_store),
 	__ATTR(max_brightness, 0644, led_max_brightness_show,
 			led_max_brightness_store),
-#if defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_LRA)
+#ifdef CONFIG_MACH_MSM8974_G3_VZW
 	__ATTR(thermald_status, 0644, thermald_status_show, thermald_status_store),
 #endif
 #ifdef CONFIG_LEDS_TRIGGERS
@@ -283,51 +276,15 @@ static ssize_t set_pattern(struct device *dev, struct device_attribute *attr, co
 {
 	ssize_t ret = -EINVAL;
 	int pattern_num = 0;
-	struct power_supply *chg_psy;
-	union power_supply_propval chg_online;
-#if defined(CONFIG_MACH_MSM8974_G3_KDDI_EVB) || defined(CONFIG_MACH_MSM8974_G3_KDDI)
-	union power_supply_propval usb_chg_online;
-#endif
 
 	if (sscanf(buf, "%d", &pattern_num) != 1) {
 		printk("[RGB LED] bad arguments ");
 	}
 	ret = size;
 
-	chg_psy = power_supply_get_by_name("ac");
-	if (chg_psy) {
-		chg_psy->get_property(chg_psy, POWER_SUPPLY_PROP_PRESENT, &chg_online);
-	} else {
-		printk("[RGB LED] Cannot get power supply property.\n");
-		chg_online.intval = 0;
-	}
-#if defined(CONFIG_MACH_MSM8974_G3_KDDI_EVB) || defined(CONFIG_MACH_MSM8974_G3_KDDI)
-	chg_psy = power_supply_get_by_name("usb");
-	if (chg_psy) {
-		chg_psy->get_property(chg_psy, POWER_SUPPLY_PROP_PRESENT, &usb_chg_online);
-	} else {
-		printk("[RGB LED] Cannot get (USB) power supply property.\n");
-		usb_chg_online.intval = 0;
-	}
-#endif
-
-#if defined(CONFIG_MACH_MSM8974_G3_KDDI_EVB) || defined(CONFIG_MACH_MSM8974_G3_KDDI)
-	printk("[RGB LED] chg_online.intval = %d usb_chg_online.intval = %d\n",
-		chg_online.intval, usb_chg_online.intval);
-	if (!(chg_online.intval || usb_chg_online.intval) && pattern_num == 3)
-		return ret;
-#else
-	printk("[RGB LED] chg_online.intval = %d\n", chg_online.intval);
-	if (!chg_online.intval && pattern_num == 3)
-		return ret;
-#endif
 	if (lge_get_boot_mode() <= LGE_BOOT_MODE_CHARGERLOGO) {
 		printk("[RGB LED] pattern_num = %d\n", pattern_num);
-#if !(defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA))
 
-		if (!pattern_num || pattern_num == 35 || pattern_num == 36 || pattern_num == 1035)
-			set_kpdbl_pattern(pattern_num);
-#endif
 		if ((pattern_num != 35) && (pattern_num != 36))
 			change_led_pattern(pattern_num);
 	}
@@ -336,50 +293,6 @@ static ssize_t set_pattern(struct device *dev, struct device_attribute *attr, co
 }
 
 static DEVICE_ATTR(setting, 0644, get_pattern, set_pattern);
-
-#if defined(CONFIG_LEDS_WINDOW_COLOR)
-static ssize_t get_window_color(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	return sprintf(buf, " - Window Color is '%s' \n", win_color);
-}
-
-static ssize_t set_window_color(struct device *dev, struct device_attribute *attr, const char *buf, size_t size)
-{
-	ssize_t ret = -EINVAL;
-	unsigned char color[30];
-
-	if (sscanf(buf, "%29s", color) != 1) {
-		printk("[RGB LED] bad arguments ");
-	}
-	ret = size;
-
-	printk("[RGB LED] # Window Color [%s] # Set Color [%s]\n", color, win_color);
-
-	memcpy(win_color, color, sizeof(color));
-
-	if (strstr(color, "black") != NULL) {
-		window_color = WINDOW_COLOR_BK;
-		printk("[RGB LED] window_color is black\n");
-	} else if (strstr(color, "white") != NULL) {
-		window_color = WINDOW_COLOR_WH;
-		printk("[RGB LED] window_color is white\n");
-	} else if (strstr(color, "silver") != NULL) {
-		window_color = WINDOW_COLOR_SV;
-		printk("[RGB LED] window_color is silver\n");
-	} else if (strstr(color, "titan") != NULL) {
-		window_color = WINDOW_COLOR_TK;
-		printk("[RGB LED] window_color is titan\n");
-	} else {
-		memcpy(win_color, "black", sizeof("black"));
-		window_color = WINDOW_COLOR_BK;
-		printk("[RGB LED] window_color is default(black)\n");
-	}
-
-	return ret;
-}
-
-static DEVICE_ATTR(window_color, 0644, get_window_color, set_window_color);
-#endif
 
 static ssize_t get_input_pattern(struct device *dev,
 						struct device_attribute *attr,
@@ -520,14 +433,15 @@ static ssize_t make_onoff_pattern(struct device *dev, struct device_attribute *a
 
 	ret = size;
 
-	/* printk("[RGB LED] make_onoff_rgb is %06x\n",rgb); */
-	make_onoff_led_pattern(onoff_rgb);
+	if (lge_get_boot_mode() <= LGE_BOOT_MODE_CHARGERLOGO) {
+		/* printk("[RGB LED] make_onoff_rgb is %06x\n",rgb); */
+		make_onoff_led_pattern(onoff_rgb);
+	}
 
 	return ret;
 }
 
 static DEVICE_ATTR(onoff_patterns, 0644, confirm_onoff_pattern, make_onoff_pattern);
-
 
 int led_pattern_sysfs_register(void)
 {
@@ -552,11 +466,6 @@ int led_pattern_sysfs_register(void)
 
 	if (device_create_file(pattern_sysfs_dev, &dev_attr_onoff_patterns) < 0)
 		printk("Failed to create device file(%s)!\n", dev_attr_onoff_patterns.attr.name);
-
-#if defined(CONFIG_LEDS_WINDOW_COLOR)
-	if (device_create_file(pattern_sysfs_dev, &dev_attr_window_color) < 0)
-		printk("Failed to create device file(%s)!\n", dev_attr_window_color.attr.name);
-#endif
 
 	return 0;
 }

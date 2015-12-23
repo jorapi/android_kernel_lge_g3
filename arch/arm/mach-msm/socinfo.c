@@ -179,6 +179,14 @@ struct socinfo_v8 {
 	uint32_t pmic_die_revision_2;
 };
 
+
+struct socinfo_v9 {
+	struct socinfo_v8 v8;
+
+	/* only valid when format==9*/
+	uint32_t foundry_id;
+};
+
 static union {
 	struct socinfo_v1 v1;
 	struct socinfo_v2 v2;
@@ -188,6 +196,7 @@ static union {
 	struct socinfo_v6 v6;
 	struct socinfo_v7 v7;
 	struct socinfo_v8 v8;
+	struct socinfo_v9 v9;
 } *socinfo;
 
 static struct msm_soc_info cpu_of_id[] = {
@@ -536,6 +545,14 @@ uint32_t socinfo_get_platform_subtype(void)
 		: 0;
 }
 
+static uint32_t socinfo_get_foundry_id(void)
+{
+	return socinfo ?
+		(socinfo->v1.format >= 9 ? socinfo->v9.foundry_id : 0)
+		: 0;
+}
+
+
 enum pmic_model socinfo_get_pmic_model(void)
 {
 	return socinfo ?
@@ -768,6 +785,9 @@ efuse_addr rbcpr_read_efuse(efuse_info_type efuse_info, avs_mode_type mode)
 	case SVS_MODE:
 		fuse_set = efuse_info.svs_target;
 		break;
+	default :
+	        fuse_set = efuse_info.nominal_target;
+	        break;
 	}
 
 	efuse_addr_info.fuse_base = efuse_info.base_addr[fuse_set.fuse_index];
@@ -857,37 +877,38 @@ socinfo_show_avs_gfx(struct sys_device *dev,
 
 static int socinfo_get_speed_bin(void)
 {
-    u32 pte_efuse, redundant_sel;
+	u32 pte_efuse, redundant_sel;
 	int speed_bin;
 	void __iomem *tmp;
 
-    tmp = ioremap(QFPROM_PTE_EFUSE_ADDR, 0x4);
+	tmp = ioremap(QFPROM_PTE_EFUSE_ADDR, 0x4);
 	pte_efuse = (u32)readl(tmp);
-    redundant_sel = (pte_efuse >> 24) & 0x7;
-    speed_bin = pte_efuse & 0x7;
-    if (redundant_sel == 1)
-        speed_bin = (pte_efuse >> 27) & 0xF;
+	redundant_sel = (pte_efuse >> 24) & 0x7;
+	speed_bin = pte_efuse & 0x7;
+	if (redundant_sel == 1)
+		speed_bin = (pte_efuse >> 27) & 0xF;
 
 	return speed_bin;
 }
 
 static int socinfo_get_pvs(void)
 {
-    u32 pte_efuse, redundant_sel;
+	u32 pte_efuse, redundant_sel;
 	int pvs;
 	void __iomem *tmp;
 
-    tmp = ioremap(QFPROM_PTE_EFUSE_ADDR, 0x4);
+	tmp = ioremap(QFPROM_PTE_EFUSE_ADDR, 0x4);
 	pte_efuse = (u32)readl(tmp);
-    redundant_sel = (pte_efuse >> 4) & 0x3;
-    pvs = ((pte_efuse >> 28) & 0x8) | ((pte_efuse >> 6) & 0x7);
+	redundant_sel = (pte_efuse >> 4) & 0x3;
+	pvs = ((pte_efuse >> 28) & 0x8) | ((pte_efuse >> 6) & 0x7);
 
-    if (redundant_sel == 2)
-        pvs = (pte_efuse >> 27) & 0xF;
+	if (redundant_sel == 2)
+		pvs = (pte_efuse >> 27) & 0xF;
 
 	pte_efuse = (u32)readl(tmp + 0x4);
-    if (!!(pte_efuse & BIT(21)))
+	if (!!(pte_efuse & BIT(21)))
 		return pvs;
+
 	return -1;
 }
 
@@ -934,31 +955,31 @@ socinfo_show_soc_name(struct sys_device *dev,
 					  struct sysdev_attribute *attr,
 					  char *buf)
 {
-    char *soc_name;
-    if (!socinfo) {
-        pr_err("%s: No socinfo found!\n", __func__);
-        return 0;
-    }
+	char *soc_name;
+	if (!socinfo) {
+		pr_err("%s: No socinfo found!\n", __func__);
+		return 0;
+	}
 
-    switch(cpu_of_id[socinfo_get_id()].generic_soc_type) {
-    case MSM_CPU_8974:
-        soc_name = "MSM_CPU_8974";
-        break;
-    case MSM_CPU_8974PRO_AA:
-        soc_name = "MSM_CPU_8974PRO_AA";
-        break;
-    case MSM_CPU_8974PRO_AB:
-        soc_name = "MSM_CPU_8974PRO_AB";
-        break;
-    case MSM_CPU_8974PRO_AC:
-        soc_name = "MSM_CPU_8974PRO_AC";
-        break;
-    default:
-        soc_name = "NOT_8974";
-        break;
-    }
+	switch(cpu_of_id[socinfo_get_id()].generic_soc_type) {
+	case MSM_CPU_8974:
+		soc_name = "MSM_CPU_8974";
+		break;
+	case MSM_CPU_8974PRO_AA:
+		soc_name = "MSM_CPU_8974PRO_AA";
+		break;
+	case MSM_CPU_8974PRO_AB:
+		soc_name = "MSM_CPU_8974PRO_AB";
+		break;
+	case MSM_CPU_8974PRO_AC:
+		soc_name = "MSM_CPU_8974PRO_AC";
+		break;
+	default:
+		soc_name = "NOT_8974";
+		break;
+	}
 
-    return snprintf(buf, PAGE_SIZE, "%s\n", soc_name);
+	return snprintf(buf, PAGE_SIZE, "%s\n", soc_name);
 }
 #endif
 
@@ -1065,6 +1086,8 @@ socinfo_show_platform_subtype(struct sys_device *dev,
 			char *buf)
 {
 	uint32_t hw_subtype;
+	WARN_ONCE(1, "Deprecated, use platform_subtype_id instead\n");
+
 	if (!socinfo) {
 		pr_err("%s: No socinfo found!\n", __func__);
 		return 0;
@@ -1091,6 +1114,18 @@ socinfo_show_platform_subtype(struct sys_device *dev,
 	}
 	return snprintf(buf, PAGE_SIZE, "%-.32s\n",
 		hw_platform_subtype[hw_subtype]);
+}
+
+static ssize_t
+socinfo_show_platform_subtype_id(struct sys_device *dev,
+			struct sysdev_attribute *attr,
+			char *buf)
+{
+	uint32_t hw_subtype;
+
+	hw_subtype = socinfo_get_platform_subtype();
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+		hw_subtype);
 }
 
 static ssize_t
@@ -1213,6 +1248,26 @@ msm_get_platform_subtype(struct device *dev,
 
 	return snprintf(buf, PAGE_SIZE, "%-.32s\n",
 		hw_platform_subtype[hw_subtype]);
+}
+
+static ssize_t
+msm_get_platform_subtype_id(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	uint32_t hw_subtype;
+	hw_subtype = socinfo_get_platform_subtype();
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+		hw_subtype);
+}
+
+static ssize_t
+msm_get_foundry_id(struct device *dev,
+			struct device_attribute *attr,
+			char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%u\n",
+		socinfo_get_foundry_id());
 }
 
 static ssize_t
@@ -1368,6 +1423,8 @@ static struct sysdev_attribute socinfo_v5_files[] = {
 static struct sysdev_attribute socinfo_v6_files[] = {
 	_SYSDEV_ATTR(platform_subtype, 0444,
 			socinfo_show_platform_subtype, NULL),
+	_SYSDEV_ATTR(platform_subtype_id, 0444,
+			socinfo_show_platform_subtype_id, NULL),
 };
 
 static struct sysdev_attribute socinfo_v7_files[] = {
@@ -1453,6 +1510,17 @@ static struct device_attribute msm_soc_attr_platform_subtype =
 	__ATTR(platform_subtype, S_IRUGO,
 			msm_get_platform_subtype, NULL);
 
+/* Platform Subtype String is being deprecated. Use Platform
+ * Subtype ID instead.
+ */
+static struct device_attribute msm_soc_attr_platform_subtype_id =
+	__ATTR(platform_subtype_id, S_IRUGO,
+			msm_get_platform_subtype_id, NULL);
+
+static struct device_attribute msm_soc_attr_foundry_id =
+	__ATTR(foundry_id, S_IRUGO,
+			msm_get_foundry_id, NULL);
+
 static struct device_attribute msm_soc_attr_pmic_model =
 	__ATTR(pmic_model, S_IRUGO,
 			msm_get_pmic_model, NULL);
@@ -1537,6 +1605,9 @@ static void __init populate_soc_sysfs_files(struct device *msm_soc_device)
 	device_create_file(msm_soc_device, &select_image);
 
 	switch (legacy_format) {
+	case 9:
+		device_create_file(msm_soc_device,
+					&msm_soc_attr_foundry_id);
 	case 8:
 	case 7:
 		device_create_file(msm_soc_device,
@@ -1546,6 +1617,8 @@ static void __init populate_soc_sysfs_files(struct device *msm_soc_device)
 	case 6:
 		device_create_file(msm_soc_device,
 					&msm_soc_attr_platform_subtype);
+		device_create_file(msm_soc_device,
+					&msm_soc_attr_platform_subtype_id);
 	case 5:
 		device_create_file(msm_soc_device,
 					&msm_soc_attr_accessory_chip);
@@ -1750,6 +1823,23 @@ static void socinfo_print(void)
 			socinfo->v7.pmic_model,
 			socinfo->v7.pmic_die_revision);
 		break;
+	case 9:
+		pr_info("%s: v%u, id=%u, ver=%u.%u, raw_id=%u, raw_ver=%u ,"
+			"hw_plat=%u, hw_plat_ver=%u\n accessory_chip=%u,"
+			"hw_plat_subtype=%u, pmic_model=%u, pmic_die_revision=%u,"
+			"foundry_id=%u\n", __func__,
+			socinfo->v1.format,
+			socinfo->v1.id,
+			SOCINFO_VERSION_MAJOR(socinfo->v1.version),
+			SOCINFO_VERSION_MINOR(socinfo->v1.version),
+			socinfo->v2.raw_id, socinfo->v2.raw_version,
+			socinfo->v3.hw_platform, socinfo->v4.platform_version,
+			socinfo->v5.accessory_chip,
+			socinfo->v6.hw_platform_subtype,
+			socinfo->v7.pmic_model,
+			socinfo->v7.pmic_die_revision,
+			socinfo->v9.foundry_id);
+		break;
 	default:
 		pr_err("%s: Unknown format found\n", __func__);
 		break;
@@ -1758,7 +1848,10 @@ static void socinfo_print(void)
 
 int __init socinfo_init(void)
 {
-	socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID, sizeof(struct socinfo_v8));
+	socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID, sizeof(struct socinfo_v9));
+	if (!socinfo)
+		socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID,
+				sizeof(struct socinfo_v8));
 
 	if (!socinfo)
 		socinfo = smem_alloc(SMEM_HW_SW_BUILD_ID,

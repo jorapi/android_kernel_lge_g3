@@ -34,13 +34,17 @@
 #include <linux/leds-lp5521.h>
 #include <linux/workqueue.h>
 #include <linux/slab.h>
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
+#ifdef CONFIG_MACH_LGE
 #include <mach/board_lge.h>
 #include <linux/regulator/consumer.h>
 #include <linux/of_gpio.h>
 #endif
 
 #define LP5521_PROGRAM_LENGTH		32	/* in bytes */
+
+#define LP5521_MAX_LEDS			3	/* Maximum number of LEDs */
+#define LP5521_MAX_ENGINES		3	/* Maximum number of engines */
+
 #define LP5521_ENG_MASK_BASE		0x30	/* 00110000 */
 #define LP5521_ENG_STATUS_MASK		0x07	/* 00000111 */
 
@@ -68,6 +72,7 @@
 #define LP5521_REG_R_PROG_MEM		0x10
 #define LP5521_REG_G_PROG_MEM		0x30
 #define LP5521_REG_B_PROG_MEM		0x50
+
 #define LP5521_PROG_MEM_BASE		LP5521_REG_R_PROG_MEM
 #define LP5521_PROG_MEM_SIZE		0x20
 
@@ -92,24 +97,50 @@
 /* default R channel current register value */
 #define LP5521_REG_R_CURR_DEFAULT	0xAF
 
+#ifdef CONFIG_MACH_LGE
 /* Current index max step */
 #define PATTERN_CURRENT_INDEX_STEP_HAL 255
+#endif
 
 /* Pattern Mode */
 #define PATTERN_OFF	0
+#ifdef CONFIG_MACH_LGE
 #define PATTERN_BLINK_ON	-1
+#endif
 
-/*GV DCM Felica Pattern Mode*/
-#define PATTERN_FELICA_ON 101
-#define PATTERN_GPS_ON 102
+struct lp5521_engine {
+	int		id;
+	u8		mode;
+	u8		prog_page;
+	u8		engine_mask;
+};
 
-/*GK Favorite MissedNoit Pattern Mode*/
-#define PATTERN_FAVORITE_MISSED_NOTI 14
+struct lp5521_led {
+	int			id;
+	u8			chan_nr;
+	u8			led_current;
+	u8			max_current;
+	struct led_classdev	cdev;
+	struct work_struct	brightness_work;
+	u8			brightness;
+};
 
-/*GK ATT Power off charged Mode (charge complete brightness 50%)*/
-#define PATTERN_CHARGING_COMPLETE_50 15
-#define PATTERN_CHARGING_50 16
+struct lp5521_chip {
+	struct lp5521_platform_data *pdata;
+	struct mutex		lock; /* Serialize control */
+	struct i2c_client	*client;
+	struct lp5521_engine	engines[LP5521_MAX_ENGINES];
+	struct lp5521_led	leds[LP5521_MAX_LEDS];
+	u8			num_channels;
+	u8			num_leds;
+#ifdef CONFIG_MACH_LGE
+	int id_pattern_play;
+	u8 current_index;
+	unsigned int rgb_led_en;
+#endif
+};
 
+#ifdef CONFIG_MACH_LGE
 /* Program Commands */
 #define CMD_SET_PWM			0x40
 #define CMD_WAIT_LSB			0x00
@@ -181,7 +212,6 @@ static const struct lp5521_wait_param lp5521_wait_params[LP5521_CYCLE_MAX] = {
 	},
 };
 
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
 static struct lp5521_led_config lp5521_led_config[] = {
 	{
 		.name = "R",
@@ -202,28 +232,6 @@ static struct lp5521_led_config lp5521_led_config[] = {
 		.max_current	= 90,
 	},
 };
-#else
-static struct lp5521_led_config lp5521_led_config[] = {
-	{
-		.name = "R",
-		.chan_nr	= 0,
-		.led_current	= 180,
-		.max_current	= 180,
-	},
-	{
-		.name = "G",
-		.chan_nr	= 1,
-		.led_current	= 180,
-		.max_current	= 180,
-	},
-	{
-		.name = "B",
-		.chan_nr	= 2,
-		.led_current	= 180,
-		.max_current	= 180,
-	},
-};
-#endif
 
 static struct lp5521_led_pattern board_led_patterns[] = {
 	{
@@ -279,7 +287,6 @@ static struct lp5521_led_pattern board_led_patterns[] = {
 		.size_g = ARRAY_SIZE(mode7_green),
 		.size_b = ARRAY_SIZE(mode7_blue),
 	},
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
 	/* for dummy pattern IDs (defined LGLedRecord.java) */
 	{
 		/* ID_ALARM = 8 */
@@ -299,7 +306,6 @@ static struct lp5521_led_pattern board_led_patterns[] = {
 	{
 		/* ID_VOLUME_DOWN = 13 */
 	},
-#endif
 	{
 		/* ID_FAVORITE_MISSED_NOTI = 14 */
 		.r = mode8_red,
@@ -461,7 +467,7 @@ static void lp5521_enable(bool state)
 		return;
 	}
 
-    if (lge_get_board_revno() > HW_REV_EVB2) {
+	if (lge_get_board_revno() > HW_REV_EVB2) {
 		if (state) {
 			gpio_set_value(chip->rgb_led_en, 1);
 			LP5521_INFO_MSG("LP5521: [%s] RGB_EN(gpio #%d) set to HIGH\n", __func__, chip->rgb_led_en);
@@ -482,7 +488,7 @@ static struct lp5521_platform_data lp5521_pdata = {
 	.num_patterns = ARRAY_SIZE(board_led_patterns),
 	.enable = lp5521_enable
 };
-
+#endif
 
 static inline struct lp5521_led *cdev_to_led(struct led_classdev *cdev)
 {
@@ -551,7 +557,7 @@ static int lp5521_load_program(struct lp5521_engine *eng, const u8 *pattern)
 	struct i2c_client *client = chip->client;
 	int ret;
 	int addr;
-	u8 mode = 0;
+	u8 mode;
 
 	/* move current engine to direct mode and remember the state */
 	ret = lp5521_set_engine_mode(eng, LP5521_CMD_DIRECT);
@@ -643,11 +649,7 @@ static void lp5521_set_brightness(struct led_classdev *cdev,
 			     enum led_brightness brightness)
 {
 	struct lp5521_led *led = cdev_to_led(cdev);
-	static unsigned long log_counter;
 	led->brightness = (u8)brightness;
-	if (log_counter++ % 100 == 0) {
-		LP5521_INFO_MSG("[%s] brightness : %d", __func__, brightness);
-	}
 	schedule_work(&led->brightness_work);
 }
 
@@ -669,7 +671,7 @@ static void lp5521_led_brightness_work(struct work_struct *work)
 static int lp5521_detect(struct i2c_client *client)
 {
 	int ret;
-	u8 buf = 0;
+	u8 buf;
 
 	ret = lp5521_write(client, LP5521_REG_ENABLE, LP5521_ENABLE_DEFAULT);
 	if (ret)
@@ -878,7 +880,6 @@ static ssize_t store_current(struct device *dev,
 		return ret;
 
 	led->led_current = (u8)curr;
-	LP5521_INFO_MSG("[%s] brightness : %d", __func__, (u8)curr);
 
 	return len;
 }
@@ -913,7 +914,11 @@ static void lp5521_clear_program_memory(struct i2c_client *cl)
 }
 
 static void lp5521_write_program_memory(struct i2c_client *cl,
+#ifdef CONFIG_MACH_LGE
 				u8 base, const u8 *rgb, int size)
+#else
+				u8 base, u8 *rgb, int size)
+#endif
 {
 	int i;
 
@@ -935,6 +940,7 @@ static inline struct lp5521_led_pattern *lp5521_get_pattern
 	return ptn;
 }
 
+#ifdef CONFIG_MACH_LGE
 static void _run_led_pattern(struct lp5521_chip *chip,
 			struct lp5521_led_pattern *ptn)
 {
@@ -956,6 +962,7 @@ static void _run_led_pattern(struct lp5521_chip *chip,
 	usleep_range(1000, 2000);
 	lp5521_write(cl, LP5521_REG_ENABLE, LP5521_ENABLE_RUN_PROGRAM);
 }
+#endif
 
 static void lp5521_run_led_pattern(int mode, struct lp5521_chip *chip)
 {
@@ -963,25 +970,15 @@ static void lp5521_run_led_pattern(int mode, struct lp5521_chip *chip)
 	struct i2c_client *cl = chip->client;
 	int num_patterns = chip->pdata->num_patterns;
 
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-	if (mode >= 1000) {
+#ifdef CONFIG_MACH_LGE
+	if (mode >= 1000)
 		mode = mode - 1000;
-	}
-#endif
-
 	chip->id_pattern_play = mode;
-
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-#if 0
-	/* this process is not need, because dummy pattern defined in board file */
-	if (mode == PATTERN_FAVORITE_MISSED_NOTI || mode == PATTERN_CHARGING_COMPLETE_50 || mode == PATTERN_CHARGING_50) {
-		mode = num_patterns - (PATTERN_CHARGING_50 - mode);
-	}
-#endif
 #endif
 	if (mode > num_patterns || !(chip->pdata->patterns)) {
+#ifdef CONFIG_MACH_LGE
 		chip->id_pattern_play = PATTERN_OFF;
-		LP5521_INFO_MSG("[%s] invalid pattern!", __func__);
+#endif
 		return;
 	}
 
@@ -989,22 +986,34 @@ static void lp5521_run_led_pattern(int mode, struct lp5521_chip *chip)
 		lp5521_write(cl, LP5521_REG_ENABLE, LP5521_ENABLE_DEFAULT);
 		usleep_range(1000, 2000);
 		lp5521_write(cl, LP5521_REG_OP_MODE, LP5521_CMD_DIRECT);
-		LP5521_INFO_MSG("[%s] PATTERN_PLAY_OFF", __func__);
 	} else {
 		ptn = lp5521_get_pattern(chip, mode);
 		if (!ptn)
 			return;
 
+#ifdef CONFIG_MACH_LGE
 		_run_led_pattern(chip, ptn);
-		LP5521_INFO_MSG("[%s] PATTERN_PLAY_ON", __func__);
+#else
+		lp5521_write(cl, LP5521_REG_OP_MODE, LP5521_CMD_LOAD);
+		usleep_range(1000, 2000);
+
+		lp5521_clear_program_memory(cl);
+
+		lp5521_write_program_memory(cl, LP5521_REG_R_PROG_MEM,
+					ptn->r, ptn->size_r);
+		lp5521_write_program_memory(cl, LP5521_REG_G_PROG_MEM,
+					ptn->g, ptn->size_g);
+		lp5521_write_program_memory(cl, LP5521_REG_B_PROG_MEM,
+					ptn->b, ptn->size_b);
+
+		lp5521_write(cl, LP5521_REG_OP_MODE, LP5521_CMD_RUN);
+		usleep_range(1000, 2000);
+		lp5521_write(cl, LP5521_REG_ENABLE, LP5521_ENABLE_RUN_PROGRAM);
+#endif
 	}
 }
 
-static u8 get_led_current_value(u8 current_index)
-{
-	return current_index_mapped_value[current_index];
-}
-
+#ifdef CONFIG_MACH_LGE
 static ssize_t show_led_pattern(struct device *dev,
 			    struct device_attribute *attr,
 			    char *buf)
@@ -1013,6 +1022,7 @@ static ssize_t show_led_pattern(struct device *dev,
 
 	return sprintf(buf, "%d\n", chip->id_pattern_play);
 }
+#endif
 
 static ssize_t store_led_pattern(struct device *dev,
 				struct device_attribute *attr,
@@ -1022,9 +1032,11 @@ static ssize_t store_led_pattern(struct device *dev,
 	unsigned long val;
 	int ret;
 
-	LP5521_INFO_MSG("[%s] pattern id : %s", __func__, buf);
-
+#ifdef CONFIG_MACH_LGE
 	ret = strict_strtoul(buf, 10, &val);
+#else
+	ret = strict_strtoul(buf, 16, &val);
+#endif
 	if (ret)
 		return ret;
 
@@ -1033,6 +1045,7 @@ static ssize_t store_led_pattern(struct device *dev,
 	return len;
 }
 
+#ifdef CONFIG_MACH_LGE
 static ssize_t show_led_current_index(struct device *dev,
 			    struct device_attribute *attr,
 			    char *buf)
@@ -1048,10 +1061,8 @@ static ssize_t store_led_current_index(struct device *dev,
 				struct device_attribute *attr,
 				const char *buf, size_t len)
 {
-	struct lp5521_chip *chip = i2c_get_clientdata(to_i2c_client(dev));
 	unsigned long val;
-	int ret, i;
-	u8 max_current, modify_current;
+	int ret;
 
 	LP5521_INFO_MSG("[%s] current index (0~255) : %s", __func__, buf);
 
@@ -1062,33 +1073,7 @@ static ssize_t store_led_current_index(struct device *dev,
 	if (val > PATTERN_CURRENT_INDEX_STEP_HAL || val < 0)
 		return -EINVAL;
 
-	if (!chip)
-		return 0;
-
-#if defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA)
-	LP5521_INFO_MSG("[%s] prevent change current_index", __func__);
 	return 0;
-#endif
-
-	chip->current_index = val;
-
-	mutex_lock(&chip->lock);
-	for (i = 0; i < LP5521_MAX_LEDS ; i++) {
-		max_current = chip->leds[i].max_current;
-		modify_current = get_led_current_value(val);
-		if (modify_current > max_current)
-			modify_current = max_current;
-		LP5521_INFO_MSG("[%s] modify_current : %d", __func__,  modify_current);
-		ret = lp5521_set_led_current(chip, i, modify_current);
-		if (ret)
-			break;
-		chip->leds[i].led_current = modify_current;
-	}
-	mutex_unlock(&chip->lock);
-
-	if (ret)
-		return ret;
-	return len;
 }
 
 static void _set_pwm_cmd(struct lp5521_pattern_cmd *cmd, unsigned int color)
@@ -1235,6 +1220,7 @@ static ssize_t store_led_blink(struct device *dev,
 
 	return len;
 }
+#endif
 
 /* led class device attributes */
 static DEVICE_ATTR(led_current, S_IRUGO | S_IWUSR, show_current, store_current);
@@ -1261,9 +1247,13 @@ static DEVICE_ATTR(engine1_load, S_IWUSR, NULL, store_engine1_load);
 static DEVICE_ATTR(engine2_load, S_IWUSR, NULL, store_engine2_load);
 static DEVICE_ATTR(engine3_load, S_IWUSR, NULL, store_engine3_load);
 static DEVICE_ATTR(selftest, S_IRUGO, lp5521_selftest, NULL);
+#ifdef CONFIG_MACH_LGE
 static DEVICE_ATTR(led_pattern, S_IRUGO | S_IWUSR, show_led_pattern, store_led_pattern);
 static DEVICE_ATTR(led_blink, S_IRUGO | S_IWUSR, NULL, store_led_blink);
 static DEVICE_ATTR(led_current_index, S_IRUGO | S_IWUSR, show_led_current_index, store_led_current_index);
+#else
+static DEVICE_ATTR(led_pattern, S_IWUSR, NULL, store_led_pattern);
+#endif
 
 static struct attribute *lp5521_attributes[] = {
 	&dev_attr_engine1_mode.attr,
@@ -1274,8 +1264,10 @@ static struct attribute *lp5521_attributes[] = {
 	&dev_attr_engine2_load.attr,
 	&dev_attr_engine3_load.attr,
 	&dev_attr_led_pattern.attr,
+#ifdef CONFIG_MACH_LGE
 	&dev_attr_led_blink.attr,
 	&dev_attr_led_current_index.attr,
+#endif
 	NULL
 };
 
@@ -1302,9 +1294,15 @@ static void lp5521_unregister_sysfs(struct i2c_client *client)
 				&lp5521_led_attribute_group);
 }
 
+#ifdef CONFIG_MACH_LGE
 static int lp5521_init_led(struct lp5521_led *led,
 				struct i2c_client *client,
 				int chan, struct lp5521_platform_data pdata)
+#else
+static int __devinit lp5521_init_led(struct lp5521_led *led,
+				struct i2c_client *client,
+				int chan, struct lp5521_platform_data *pdata)
+#endif
 {
 	struct device *dev = &client->dev;
 	char name[32];
@@ -1313,12 +1311,22 @@ static int lp5521_init_led(struct lp5521_led *led,
 	if (chan >= LP5521_MAX_LEDS)
 		return -EINVAL;
 
+#ifdef CONFIG_MACH_LGE
 	if (lp5521_pdata.led_config[chan].led_current == 0)
+#else
+	if (pdata->led_config[chan].led_current == 0)
+#endif
 		return 0;
 
+#ifdef CONFIG_MACH_LGE
 	led->led_current = lp5521_pdata.led_config[chan].led_current;
 	led->max_current = lp5521_pdata.led_config[chan].max_current;
 	led->chan_nr = lp5521_pdata.led_config[chan].chan_nr;
+#else
+	led->led_current = pdata->led_config[chan].led_current;
+	led->max_current = pdata->led_config[chan].max_current;
+	led->chan_nr = pdata->led_config[chan].chan_nr;
+#endif
 
 	if (led->chan_nr >= LP5521_MAX_LEDS) {
 		dev_err(dev, "Use channel numbers between 0 and %d\n",
@@ -1327,11 +1335,20 @@ static int lp5521_init_led(struct lp5521_led *led,
 	}
 
 	led->cdev.brightness_set = lp5521_set_brightness;
+#ifdef CONFIG_MACH_LGE
 	if (lp5521_pdata.led_config[chan].name) {
 		led->cdev.name = lp5521_pdata.led_config[chan].name;
+#else
+	if (pdata->led_config[chan].name) {
+		led->cdev.name = pdata->led_config[chan].name;
+#endif
 	} else {
 		snprintf(name, sizeof(name), "%s:channel%d",
+#ifdef CONFIG_MACH_LGE
 			lp5521_pdata.label ?: client->name, chan);
+#else
+			pdata->label ?: client->name, chan);
+#endif
 		led->cdev.name = name;
 	}
 
@@ -1351,16 +1368,137 @@ static int lp5521_init_led(struct lp5521_led *led,
 	return 0;
 }
 
+#ifndef CONFIG_MACH_LGE
+static int __devinit lp5521_probe(struct i2c_client *client,
+			const struct i2c_device_id *id)
+{
+	struct lp5521_chip		*chip;
+	struct lp5521_platform_data	*pdata;
+	int ret, i, led;
+	u8 buf;
+
+	chip = kzalloc(sizeof(*chip), GFP_KERNEL);
+	if (!chip)
+		return -ENOMEM;
+
+	i2c_set_clientdata(client, chip);
+	chip->client = client;
+
+	pdata = client->dev.platform_data;
+
+	if (!pdata) {
+		dev_err(&client->dev, "no platform data\n");
+		ret = -EINVAL;
+		goto fail1;
+	}
+
+	mutex_init(&chip->lock);
+
+	chip->pdata   = pdata;
+
+	if (pdata->setup_resources) {
+		ret = pdata->setup_resources();
+		if (ret < 0)
+			goto fail1;
+	}
+
+	if (pdata->enable) {
+		pdata->enable(0);
+		usleep_range(1000, 2000); /* Keep enable down at least 1ms */
+		pdata->enable(1);
+		usleep_range(1000, 2000); /* 500us abs min. */
+	}
+
+	lp5521_write(client, LP5521_REG_RESET, 0xff);
+	usleep_range(10000, 20000); /*
+				     * Exact value is not available. 10 - 20ms
+				     * appears to be enough for reset.
+				     */
+
+	/*
+	 * Make sure that the chip is reset by reading back the r channel
+	 * current reg. This is dummy read is required on some platforms -
+	 * otherwise further access to the R G B channels in the
+	 * LP5521_REG_ENABLE register will not have any effect - strange!
+	 */
+	ret = lp5521_read(client, LP5521_REG_R_CURRENT, &buf);
+	if (buf != LP5521_REG_R_CURR_DEFAULT) {
+		dev_err(&client->dev, "error in resetting chip\n");
+		goto fail2;
+	}
+	usleep_range(10000, 20000);
+
+	ret = lp5521_detect(client);
+
+	if (ret) {
+		dev_err(&client->dev, "Chip not found\n");
+		goto fail2;
+	}
+
+	dev_info(&client->dev, "%s programmable led chip found\n", id->name);
+
+	ret = lp5521_configure(client);
+	if (ret < 0) {
+		dev_err(&client->dev, "error configuring chip\n");
+		goto fail2;
+	}
+
+	/* Initialize leds */
+	chip->num_channels = pdata->num_channels;
+	chip->num_leds = 0;
+	led = 0;
+	for (i = 0; i < pdata->num_channels; i++) {
+		/* Do not initialize channels that are not connected */
+		if (pdata->led_config[i].led_current == 0)
+			continue;
+
+		ret = lp5521_init_led(&chip->leds[led], client, i, pdata);
+		if (ret) {
+			dev_err(&client->dev, "error initializing leds\n");
+			goto fail3;
+		}
+		chip->num_leds++;
+
+		chip->leds[led].id = led;
+		/* Set initial LED current */
+		lp5521_set_led_current(chip, led,
+				chip->leds[led].led_current);
+
+		INIT_WORK(&(chip->leds[led].brightness_work),
+			lp5521_led_brightness_work);
+
+		led++;
+	}
+
+	ret = lp5521_register_sysfs(client);
+	if (ret) {
+		dev_err(&client->dev, "registering sysfs failed\n");
+		goto fail3;
+	}
+	return ret;
+fail3:
+	for (i = 0; i < chip->num_leds; i++) {
+		led_classdev_unregister(&chip->leds[i].cdev);
+		cancel_work_sync(&chip->leds[i].brightness_work);
+	}
+fail2:
+	if (pdata->enable)
+		pdata->enable(0);
+	if (pdata->release_resources)
+		pdata->release_resources();
+fail1:
+	kfree(chip);
+	return ret;
+}
+#else
 static int lp5521_probe(struct i2c_client *client,
 			const struct i2c_device_id *id)
 {
-
 	int ret = 0, i, led;
 	u8 buf = 0;
 
 	LP5521_INFO_MSG("[%s] start\n", __func__);
 
-#ifdef CONFIG_OF
 	if (&client->dev.of_node) {
 		chip = devm_kzalloc(&client->dev, sizeof(struct lp5521_chip), GFP_KERNEL);
 		if (!chip) {
@@ -1386,26 +1524,20 @@ static int lp5521_probe(struct i2c_client *client,
 		dev_err(&client->dev, "lp5521 probe of_node fail\n");
 		return -ENODEV;
 	}
-#else
-	chip = devm_kzalloc(&client->dev, sizeof(*chip), GFP_KERNEL);
-	if (!chip) {
-		LP5521_INFO_MSG("[%s] Can not allocate memory!\n", __func__);
-		return -ENOMEM;
-	}
-#endif
 
 	i2c_set_clientdata(client, chip);
 	chip->client = client;
 
 	mutex_init(&chip->lock);
 
+
 	chip->pdata = &lp5521_pdata;
 
-    gpio_set_value((chip->rgb_led_en), 0);
-    usleep_range(1000, 2000); /* Keep enable down at least 1ms */
+	gpio_set_value((chip->rgb_led_en), 0);
+	usleep_range(1000, 2000); /* Keep enable down at least 1ms */
 
-    gpio_set_value((chip->rgb_led_en), 1);
-    usleep_range(1000, 2000); /* Keep enable down at least 1ms */
+	gpio_set_value((chip->rgb_led_en), 1);
+	usleep_range(1000, 2000); /* Keep enable down at least 1ms */
 
 	lp5521_write(client, LP5521_REG_RESET, 0xff);
 	usleep_range(10000, 20000); /*
@@ -1477,12 +1609,6 @@ static int lp5521_probe(struct i2c_client *client,
 		goto fail2;
 	}
 
-#if !(defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA))
-	lp5521_run_led_pattern(1, chip); /* 1: Power On pattern number */
-	LP5521_INFO_MSG("[%s] pattern id : 1(Power on)", __func__);
-	LP5521_INFO_MSG("[%s] complete\n", __func__);
-#endif
-
 	return ret;
 fail2:
 	for (i = 0; i < chip->num_leds; i++) {
@@ -1499,13 +1625,17 @@ fail0:
 
 	return ret;
 }
+#endif
 
+#ifdef CONFIG_MACH_LGE
 static int lp5521_remove(struct i2c_client *client)
+#else
+static int __devexit lp5521_remove(struct i2c_client *client)
+#endif
 {
 	struct lp5521_chip *chip = i2c_get_clientdata(client);
 	int i;
 
-	LP5521_INFO_MSG("[%s] start\n", __func__);
 	lp5521_run_led_pattern(PATTERN_OFF, chip);
 	lp5521_unregister_sysfs(client);
 
@@ -1514,18 +1644,23 @@ static int lp5521_remove(struct i2c_client *client)
 		cancel_work_sync(&chip->leds[i].brightness_work);
 	}
 
-	if (lge_get_board_revno() > HW_REV_EVB2) {
-		if (chip->pdata->enable)
-			chip->pdata->enable(0);
-	}
+#ifdef CONFIG_MACH_LGE
+	if (lge_get_board_revno() > HW_REV_EVB2)
+#endif
+	if (chip->pdata->enable)
+		chip->pdata->enable(0);
 	if (chip->pdata->release_resources)
 		chip->pdata->release_resources();
 
+#ifdef CONFIG_MACH_LGE
 	devm_kfree(&client->dev, chip);
-	LP5521_INFO_MSG("[%s] complete\n", __func__);
+#else
+	kfree(chip);
+#endif
 	return 0;
 }
 
+#ifdef CONFIG_MACH_LGE
 static void lp5521_shutdown(struct i2c_client *client)
 {
 	struct lp5521_chip *chip = i2c_get_clientdata(client);
@@ -1597,14 +1732,6 @@ static int lp5521_resume(struct i2c_client *client)
 			usleep_range(1000, 2000); /* Keep enable down at least 1ms */
 			chip->pdata->enable(1);
 			usleep_range(1000, 2000); /* 500us abs min. */
-#if !(defined(CONFIG_MACH_MSM8974_G3_LGU) || defined(CONFIG_MACH_MSM8974_G3_SKT) || defined(CONFIG_MACH_MSM8974_G3_KT) || defined(CONFIG_MACH_MSM8974_G3_ATT) || defined(CONFIG_MACH_MSM8974_G3_VZW) || defined(CONFIG_MACH_MSM8974_G3_SPR_US) || defined(CONFIG_MACH_MSM8974_G3_USC_US) || defined(CONFIG_MACH_MSM8974_G3_TMO_US) || defined(CONFIG_MACH_MSM8974_G3_GLOBAL_COM) || defined(CONFIG_MACH_MSM8974_G3_CN) || defined(CONFIG_MACH_MSM8974_G3_CA) || defined(CONFIG_MACH_MSM8974_G3_LRA))
-			lp5521_write(client, LP5521_REG_RESET, 0xff);
-			usleep_range(10000, 20000);
-			ret = lp5521_configure(client);
-			if (ret < 0) {
-				dev_err(&client->dev, "error configuring chip\n");
-			}
-#endif
 		}
 	} else {
 		if (chip->id_pattern_play == PATTERN_OFF) {
@@ -1621,38 +1748,38 @@ static int lp5521_resume(struct i2c_client *client)
 	return ret;
 }
 
-static const struct i2c_device_id lp5521_id[] = {
-	{ "lp5521", 0 }, /* Three channel chip */
-	{ }
-};
-
-#ifdef CONFIG_OF
 static struct of_device_id lp5521_match_table[] = {
 	{ .compatible = "ti,lp5521",},
 	{ },
 };
 #endif
 
+static const struct i2c_device_id lp5521_id[] = {
+	{ "lp5521", 0 }, /* Three channel chip */
+	{ }
+};
+MODULE_DEVICE_TABLE(i2c, lp5521_id);
+
 static struct i2c_driver lp5521_driver = {
 	.driver = {
-		.owner  = THIS_MODULE,
 		.name	= "lp5521",
-#ifdef CONFIG_OF
+#ifdef CONFIG_MACH_LGE
 		.of_match_table = lp5521_match_table,
 #endif
 	},
 	.probe		= lp5521_probe,
+#ifdef CONFIG_MACH_LGE
 	.remove		= lp5521_remove,
 	.shutdown	= lp5521_shutdown,
 	.suspend	= lp5521_suspend,
 	.resume		= lp5521_resume,
+#else
+	.remove		= __devexit_p(lp5521_remove),
+#endif
 	.id_table	= lp5521_id,
 };
 
-/*
- * module load/unload record keeping
- */
-
+#ifdef CONFIG_MACH_LGE
 static int __init lp5521_dev_init(void)
 {
 	return i2c_add_driver(&lp5521_driver);
@@ -1664,8 +1791,9 @@ static void __exit lp5521_dev_exit(void)
 	i2c_del_driver(&lp5521_driver);
 }
 module_exit(lp5521_dev_exit);
-
-MODULE_DEVICE_TABLE(i2c, lp5521_id);
+#else
+module_i2c_driver(lp5521_driver);
+#endif
 
 MODULE_AUTHOR("Mathias Nyman, Yuri Zaporozhets, Samu Onkalo");
 MODULE_DESCRIPTION("LP5521 LED engine");

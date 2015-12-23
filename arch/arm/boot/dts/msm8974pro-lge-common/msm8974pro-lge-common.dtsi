@@ -32,6 +32,15 @@
 		uart99 = &uart5;
 	};
 //CONFIG_LGE_BLUETOOTH (-) - Set UART5
+
+    memory {
+        crash_fb_mem: crash_fb_mem {
+            linux,contiguous-region;
+            linux,reserve-region;
+            reg = <0x0d800000 0xc00000>;
+            label = "crash_fb_mem";
+        };
+    };
 };
 
 &sdhc_1 {
@@ -76,8 +85,16 @@
 	vdd-supply = <&pm8941_l21>;
 };
 
+
+
 &soc {
 	/delete-node/spi_eth_phy_vreg;
+
+    crash_fb {
+        compatible = "crash_fb";
+        mem-addr = <0x0d800000>;
+        mem-size = <0xc00000>;
+    };
 
 	/* label: i2c_0 (label defined in msm8974.dtsi) */
 	i2c@f9967000 {
@@ -146,11 +163,12 @@
 		qcom,msm-bus,vectors-KBps =
 				<86 512 0 0>,
 				<86 512 500 800>;
+		// Disable Auto RFR (Ready For Receive) Function of msm_serial_hs
+		// Because of BT Sleep control error
+		qcom,msm-obs;
 	};
 
 	// IRRC (BLSP 2 UART 6). UART6 For IRRC
-	//  LGE_CHANGE_S, [IRRC][daegeun.yoon@lge.com], 2014-01-09, IRRC Bring up for B2
-
         serial@f9962000 {
                 compatible = "qcom,msm-lsuart-v14";
                 reg = <0xf9962000 0x100>;
@@ -179,10 +197,6 @@
 		interrupt-names = "host_wake";
 	};
 	//CONFIG_LGE_BLUETOOTH (-)
-
-	qcom,bam_dmux@fc834000 {
-		qcom,fast-shutdown;
-	};
 
 };
 &cci {

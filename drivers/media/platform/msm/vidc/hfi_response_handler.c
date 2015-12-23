@@ -1069,10 +1069,6 @@ static void hfi_process_session_stop_done(
 {
 	struct msm_vidc_cb_cmd_done cmd_done;
 
-#ifdef REDUCE_KERNEL_ERROR_LOG
-	debug_kernel_count=0;
-#endif
-
 	dprintk(VIDC_DBG, "RECEIVED: SESSION_STOP_DONE[%u]\n",
 		pkt->session_id);
 
@@ -1270,6 +1266,7 @@ static void hfi_process_sys_get_prop_image_version(
 }
 
 static void hfi_process_sys_property_info(
+		msm_vidc_callback callback, u32 device_id,
 		struct hfi_msg_sys_property_info_packet *pkt)
 {
 	if (!pkt) {
@@ -1339,7 +1336,7 @@ u32 hfi_process_msg_packet(
 						msg_hdr);
 		break;
 	case HFI_MSG_SYS_PROPERTY_INFO:
-		hfi_process_sys_property_info(
+		hfi_process_sys_property_info(callback, device_id,
 		   (struct hfi_msg_sys_property_info_packet *)
 			msg_hdr);
 		break;

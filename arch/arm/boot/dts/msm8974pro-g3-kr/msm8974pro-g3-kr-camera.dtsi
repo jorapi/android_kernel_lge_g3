@@ -39,8 +39,8 @@
 
 &soc {
 	qcom,cci@fda0C000 {
-		actuator0: qcom,actuator@18 {
-			cell-index = <1>;//Use Af_main_1 of dw9714
+		actuator0: qcom,actuator@18 {	//DW9714
+			cell-index = <1>;
 			reg = <0x18>;
 			compatible = "qcom,actuator";
 			qcom,cci-master = <0>;
@@ -56,7 +56,7 @@
 			qcom,num-blocks = <1>;
 			qcom,page0 = <0 0x0 2 0x0 1 20>;
 			qcom,poll0 = <0 0x0 2 0x0 1 20>;
-			qcom,mem0 = <0x900 0x0000 2 0 1 0>; //EEPROM READ
+			qcom,mem0 = <0x900 0x0000 2 0 1 0>;
 
 			cam_vdig-supply = <&pm8941_l11>;
 			qcom,cam-vreg-name = "cam_vdig", "cam_vio", "cam_vana", "cam_vaf";
@@ -69,17 +69,17 @@
 				<&msmgpio 4 0>,			// MAIN_CAM_RESET
 				<&msmgpio 16 0>,			// 13M_VANA_EN
 				<&msmgpio 96 0>,			// 13M_VIO_EN
-				<&msmgpio 145 0>,			// 13M_VCM_EN : OIS_MVDD
-				<&msmgpio 30 0>,		// OIS_LDO_EN : OIS_VDD
-				<&msmgpio 29 0>,		// OIS_RESET
-				<&pm8941_gpios 1 0>;	// LDAF_EN
+				<&msmgpio 145 0>,		// 13M_VCM_EN : OIS_MVDD
+				<&msmgpio 30 0>,			// OIS_LDO_EN : OIS_VDD
+				<&msmgpio 29 0>,			// OIS_RESET
+				<&pm8941_gpios 1 0>;		// LDAF_EN
 			qcom,gpio-reset = <1>; 		// Set gpio_4 as reset
 			qcom,gpio-vana = <2>;		// Set gpio_16 as VANA
 			qcom,gpio-vio = <3>;			// Set gpio_96 as VIO
 			qcom,gpio-vaf = <4>;			// Set pm8941_gpio_4 as VCM
 			qcom,gpio-ois-ldo = <5>;		// Set gpio_145 as OIS_LDO_EN
 			qcom,gpio-ois-reset = <6>;		// Set gpio_29 as OIS_RESET
-			qcom,gpio-ldaf-en = <7>;		// Set gpio_29 as OIS_RESET
+			qcom,gpio-ldaf-en = <7>;
 			qcom,gpio-req-tbl-num = <0 1 2 3 4 5 6 7>;
 			qcom,gpio-req-tbl-flags = <0 0 0 0 0 0 0 0>;
 			qcom,gpio-req-tbl-label =  "CAMIF_MCLK", "CAM_RESET1", "MAIN_VANA_EN", "MAIN_VIO_EN", "MAIN_VCM_EN",
@@ -128,7 +128,7 @@
 			qcom,gpio-ois-reset = <7>;		// Set gpio_29 as OIS_RESET
 			qcom,gpio-req-tbl-num = <0 1 2 3 4 5 6 7>;
 			qcom,gpio-req-tbl-flags = <0 0 0 0 0 0 0 0>;
-			qcom,gpio-req-tbl-label =  "CAMIF_MCLK", "CAM_RESET1", "MAIN_VANA_EN", "MAIN_VIO_EN", "MAIN_VCM_EN", 
+			qcom,gpio-req-tbl-label =  "CAMIF_MCLK", "CAM_RESET1", "MAIN_VANA_EN", "MAIN_VIO_EN", "MAIN_VCM_EN",
 										"OIS_LDO_EN", "AF_MVDD", "OIS_RESET";
 			qcom,csi-lane-assign = <0x4320>;
 			qcom,csi-lane-mask = <0x1F>;
@@ -146,7 +146,7 @@
 			qcom,csiphy-sd-index = <0>;
 			qcom,csid-sd-index = <0>;
 			qcom,actuator-src = <&actuator0>;
-			qcom,eeprom-src = <&eeprom0>; //Read EEPROM
+			qcom,eeprom-src = <&eeprom0>;
 			qcom,led-flash-src = <&led_flash0>;
 			qcom,mount-angle = <90>;
 			qcom,sensor-name = "imx135";
@@ -161,10 +161,10 @@
 				<&msmgpio 4 0>,			// MAIN_CAM_RESET
 				<&msmgpio 16 0>,			// 13M_VANA_EN
 				<&msmgpio 96 0>,			// 13M_VIO_EN
-				<&msmgpio 145 0>,			// 13M_VCM_EN : OIS_MVDD
-				<&msmgpio 30 0>,		// OIS_LDO_EN : OIS_VDD
-				<&msmgpio 29 0>,		// OIS_RESET
-				<&pm8941_gpios 1 0>;	// LDAF_EN
+				<&msmgpio 145 0>,		// 13M_VCM_EN : OIS_MVDD
+				<&msmgpio 30 0>,			// OIS_LDO_EN : OIS_VDD
+				<&msmgpio 29 0>,			// OIS_RESET
+				<&pm8941_gpios 1 0>;		// LDAF_EN
 			qcom,gpio-reset = <1>; 		// Set gpio_4 as reset
 			qcom,gpio-vana = <2>;		// Set gpio_16 as VANA
 			qcom,gpio-vio = <3>;			// Set gpio_96 as VIO
@@ -296,4 +296,3 @@
 		};
 	};
 };
-

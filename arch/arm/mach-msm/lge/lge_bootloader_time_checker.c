@@ -22,7 +22,6 @@
 #include <linux/moduleparam.h>
 #include <mach/board_lge.h>
 
-
 #define MODULE_NAME "bootloader_time_checker"
 
 static int dummy_arg;
