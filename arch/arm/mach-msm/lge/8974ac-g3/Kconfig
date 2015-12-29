@@ -39,6 +39,14 @@ config MACH_MSM8974_G3_SPR_US
 	help
 	  Support for the Qualcomm MSM8974 G3 Sprint device.
 
+config MACH_MSM8974_G3_USC_US
+	depends on ARCH_MSM8974
+	select MACH_MSM8974_G3
+	select LGE_MMC_SD_USE_SDCC3
+	bool "MSM8974 G3 USC US"
+	help
+	  Support for the Qualcomm MSM8974 G3 Usc device.
+
 config MACH_MSM8974_G3_TMO_US
 	depends on ARCH_MSM8974
 	select MACH_MSM8974_G3
